@@ -1,0 +1,46 @@
+step 1: install default-jdk, pssh and python on all hosts
+step 2: ssh connect without password between hosts
+
+step 3: copy code on all host
+
+use largest instance and install java in every instance
+
+mvn package #builds the jars
+cd contrib/YCSV; bash ./install-kaijuryweve-jar.sh; cd ../.. cd tools; mvn package #build command line client
+
+copy code on all servers, and add a folder containing all-hosts.txt, all-clients.txt, all-servers.txt on every hosts
+
+
+for h in 10.254.0.182 10.254.2.99 10.254.0.114 10.254.2.87 10.254.3.46 10.254.0.5 10.254.0.208 10.254.3.153 10.254.1.51 10.254.3.4 ; { scp -r ./* ubuntu@$h:/home/ubuntu ; }
+{ ssh-copy-id ubuntu@$h ; }
+
+
+password=63bd917938b1
+
+TAG = test_scalabilty
+EXPERIMENT = { "serversList" : [(5,5)],
+                    "txnlen" : [4],
+                    "threads" : [1000],
+                    "numseconds" : 60,
+                    "configs" : [ "READ_COMMITTED",
+                                  "READ_ATOMIC_STAMP", 
+                                  "EIGER",
+                                  "READ_ATOMIC_LIST",
+                                  "READ_ATOMIC_BLOOM",
+                                  "LWLR",
+                                  "LWSR",
+                                  "LWNR" ],
+                    "readprop" : [0.95],
+                    "iterations" : range(0,3),
+                    "numkeys" : [1000000],
+                    "valuesize" : [1],
+                    "keydistribution" : "zipfian",
+                    "bootstrap_time_ms" : 10000,
+                    "launch_in_bg" : False,
+                    "drop_commit_pcts" : [0],
+                    "check_commit_delays" : [-1],
+                 }
+python setup_hosts.py --color -c us-west-2 --experiment $EXPERIMENT --tag $TAG --output multitest/$EXPERIMENT
+
+
+(buckets is what determines the # of printed txns in the logs)
