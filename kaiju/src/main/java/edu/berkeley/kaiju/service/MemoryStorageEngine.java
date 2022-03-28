@@ -356,7 +356,7 @@ public class MemoryStorageEngine {
         // all pairs will have the same timestamp, but we still send the
         // pairs with separate timestamps because they'll be stored that way
         long timestamp = pairs.values().iterator().next().getTimestamp();
-
+        Map<String,Long> updateLastSet = Maps.newHashMap();
         if(abortedTxns.containsKey(timestamp)) {
             throw new AbortedException("Timestamp was already aborted pre-commit "+timestamp);
         }
@@ -366,8 +366,15 @@ public class MemoryStorageEngine {
         for(Map.Entry<String, DataItem> pair : pairs.entrySet()) {
             prepare(pair.getKey(), pair.getValue());
             pendingPairs.add(new KeyTimestampPair(pair.getKey(), pair.getValue().getTimestamp()));
+            if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
+                if(!last.containsKey(pair.getKey()) || last.get(pair.getKey()) < pair.getValue().getTimestamp()){
+                    updateLastSet.putIfAbsent(pair.getKey(), pair.getValue().getTimestamp());
+                }
+            }
         }
-
+        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
+            last.putAll(updateLastSet);
+        }
         preparedNotCommittedByStamp.put(timestamp, pendingPairs);
 
     }
@@ -378,18 +385,18 @@ public class MemoryStorageEngine {
         if(toUpdate == null) {
             return;
         }
-        Map<String,Long> updateLastSet = Maps.newHashMap();
+        //Map<String,Long> updateLastSet = Maps.newHashMap();
         for(KeyTimestampPair pair : toUpdate) {
             commit(pair.getKey(), pair.getTimestamp());
-            if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
+            /*if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
                 if(!last.containsKey(pair.getKey()) || last.get(pair.getKey()) < pair.getTimestamp()){
                     updateLastSet.putIfAbsent(pair.getKey(), pair.getTimestamp());
                 }
-            }
+            }*/
         }
-        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
+        /*if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
             last.putAll(updateLastSet);
-        }
+        }*/
 
         preparedNotCommittedByStamp.remove(timestamp);
     }
