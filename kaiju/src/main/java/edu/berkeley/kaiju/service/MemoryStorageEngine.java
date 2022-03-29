@@ -119,25 +119,7 @@ public class MemoryStorageEngine {
     
     private ConcurrentMap<String,Long> last = Maps.newConcurrentMap();
    
-
-    public void addLast(final String key, final Long value, final List<String> keyList) throws HandlerException{
-        try{
-            Map<String,Long> addSet = Maps.newHashMap();
-            for(String k: keyList){
-                if(!this.last.containsKey(k) || this.last.get(k) < value){
-                    addSet.put(k, value);
-                }
-            }
-
-            if(!this.last.containsKey(key) || this.last.get(key) < value){
-                addSet.put(key, value);
-            }
-            this.last.putAll(addSet);
-        }catch(Exception e){
-            throw new HandlerException("Error updating Last", e);
-        }
-    }
-
+                                                                                    
     public long getLastTimestamp(final String key){
         return (this.last.containsKey(key)) ? this.last.get(key) : Timestamp.NO_TIMESTAMP;
     }
@@ -181,8 +163,16 @@ public class MemoryStorageEngine {
                     item = getLatestItemForKey(key);
                 else
                     item = getByTimestamp(key, timestamp);
-                if(item != null && item.getTransactionKeys() != null)
-                    addLast(key, item.getTimestamp(), Lists.newArrayList(item.getTransactionKeys()));
+                if(item != null && item.getTransactionKeys() != null){
+                    if(!this.last.containsKey(key) || this.last.get(key) < item.getTimestamp()){
+                        synchronized(this){
+                            this.last.put(key,item.getTimestamp());
+                            item.getTransactionKeys().forEach(i -> {
+                                if(!this.last.containsKey(i) || this.last.get(i) < item.getTimestamp()) this.last.put(i, item.getTimestamp());
+                            });
+                        }
+                    }
+                }
                 results.put(key, item);
             }
             return results;
@@ -373,7 +363,9 @@ public class MemoryStorageEngine {
             }
         }
         if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
-            last.putAll(updateLastSet);
+            synchronized(this){
+                last.putAll(updateLastSet);
+            }
         }
         preparedNotCommittedByStamp.put(timestamp, pendingPairs);
 
