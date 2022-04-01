@@ -17,11 +17,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Map;
+
+import com.google.common.collect.Maps;
 
 public class KaijuServer {
 
     private static Logger logger = LoggerFactory.getLogger(KaijuServer.class);
-
+    public static volatile Map<String,Long> last = Maps.newConcurrentMap();
     public static void main(String[] args) {
         Config.serverSideInitialize(args);
 

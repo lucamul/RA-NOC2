@@ -29,19 +29,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 public class KaijuServiceHandler implements IKaijuHandler {
-    private IKaijuHandler handler;
+    public IKaijuHandler handler;
     private RequestDispatcher dispatcher;
     private LockManager manager;
     private MemoryStorageEngine storage;
 
     private static Logger logger = LoggerFactory.getLogger(KaijuServiceHandler.class);
 
-    private static Timer getAllTimer = MetricsManager.getRegistry().timer(MetricRegistry.name(KaijuServiceHandler.class,
+    public static Timer getAllTimer = MetricsManager.getRegistry().timer(MetricRegistry.name(KaijuServiceHandler.class,
                                                                                        "getall-requests",
                                                                                        "latency"));
 
@@ -148,6 +149,28 @@ public class KaijuServiceHandler implements IKaijuHandler {
                     context.stop();
                 }
         }
+    }
+
+    public long lora_put_all(Map<String,byte[]> values) throws HandlerException{
+        Timer.Context context = putAllTimer.time();
+        long timestamp = Timestamp.assignNewTimestamp();
+        try {
+            handler.prepare_all(values, timestamp);
+        } catch(HandlerException e) {
+            logger.warn("put_all exception", e);
+            throw e;
+        } finally {
+            context.stop();
+            CompletableFuture.runAsync(()->{
+                try{
+                    handler.commit_all(values, timestamp);
+                }catch(Exception e){
+                    e.printStackTrace();
+                    e.printStackTrace(System.out);
+                }
+            });
+        }
+        return timestamp;
     }
 
     // used in CTP; probably shouldn't actually live here.

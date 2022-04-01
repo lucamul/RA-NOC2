@@ -46,7 +46,7 @@ public abstract class ReadAtomicKaijuServiceHandler implements IKaijuHandler {
 
 
     // fetch specific versions from server (e.g., second-round RAMP-Fast)
-    protected Collection<KaijuResponse> fetch_by_version_from_server(Map<String, Long> keyToVersionRequired) throws HandlerException {
+    public Collection<KaijuResponse> fetch_by_version_from_server(Map<String, Long> keyToVersionRequired) throws HandlerException {
         return fetch_from_server(null, keyToVersionRequired, null, null, false);
     }
 

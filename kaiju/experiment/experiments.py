@@ -72,13 +72,12 @@ lora_debug = {
                     "numseconds" : 60,
                     "configs" : [
                                   "READ_ATOMIC_LORA",
-                                  "READ_ATOMIC_LIST",
                                 ],
                     "readprop" : [.95],
                     "iterations" : range(0,1),
                     "numkeys" : [100000],
                     "valuesize" : [1],
-                    "keydistribution" : ["uniform"],
+                    "keydistribution" : ["zipfian"],
                     "bootstrap_time_ms" : 10000,
                     "launch_in_bg" : False,
                     "drop_commit_pcts" : [0],
@@ -107,7 +106,7 @@ experiments = { "debug" :
                                       "readprop",
                                       [.95]),
                 
-                "lora" : freshness_test,
+                "lora" : lora_debug,
                 
                 "threads" : chg_param(defaultsettings.copy(),
                                       "threads",
