@@ -3,4 +3,4 @@
 sudo apt update
 sudo apt install -y default-jdk
 sudo apt install -y pssh
-sudo apt install maven
+sudo apt install -y maven

@@ -24,7 +24,7 @@ import com.google.common.collect.Maps;
 public class KaijuServer {
 
     private static Logger logger = LoggerFactory.getLogger(KaijuServer.class);
-    public static volatile Map<String,Long> last = Maps.newConcurrentMap();
+    public static Map<String,Long> last = Maps.newConcurrentMap();
     public static void main(String[] args) {
         Config.serverSideInitialize(args);
 

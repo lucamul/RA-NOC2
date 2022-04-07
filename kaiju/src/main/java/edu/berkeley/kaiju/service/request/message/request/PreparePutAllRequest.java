@@ -27,17 +27,6 @@ public class PreparePutAllRequest extends KaijuMessage implements IKaijuRequest 
     public KaijuResponse processRequest(MemoryStorageEngine storageEngine, LockManager lockManager) throws
                                                                                                     KaijuException {
         storageEngine.prepare(keyValuePairs);
-        long time = System.currentTimeMillis();
-        for(Map.Entry<String,DataItem> entry : keyValuePairs.entrySet()){
-            storageEngine.timesPerVersion.putIfAbsent(storageEngine.createNewKeyTimestampPair(entry.getKey(), entry.getValue().getTimestamp()), time);
-            if(Config.getConfig().freshness_test == 1){
-                if(storageEngine.latestTime.containsKey(entry.getKey()) && storageEngine.latestTime.get(entry.getKey()) < time){
-                    storageEngine.latestTime.replace(entry.getKey(),time);
-                }else{
-                    storageEngine.latestTime.put(entry.getKey(), time);
-                }
-            }
-        }
         return new KaijuResponse();
     }
 }

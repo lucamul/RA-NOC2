@@ -11,11 +11,11 @@ cd contrib/YCSV; bash ./install-kaijuryweve-jar.sh; cd ../.. cd tools; mvn packa
 copy code on all servers, and add a folder containing all-hosts.txt, all-clients.txt, all-servers.txt on every hosts
 
 
-for h in 10.254.0.182 10.254.2.99 10.254.0.114 10.254.2.87 10.254.3.46 10.254.0.5 10.254.0.208 10.254.3.153 10.254.1.51 10.254.3.4 ; { scp -r ./* ubuntu@$h:/home/ubuntu ; }
+for h in 10.254.1.19 10.254.1.47 10.254.2.214 10.254.3.47 10.254.2.103 10.254.1.170 10.254.2.63 10.254.1.46 10.254.3.184 10.254.2.160 ; { scp -r ./* ubuntu@$h:/home/ubuntu ; }
 { ssh-copy-id ubuntu@$h ; }
 
 
-password=63bd917938b1
+password=332d62c18f83
 
 TAG = test_scalabilty
 EXPERIMENT = { "serversList" : [(5,5)],

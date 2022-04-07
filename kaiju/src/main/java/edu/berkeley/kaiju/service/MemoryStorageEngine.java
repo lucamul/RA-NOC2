@@ -117,13 +117,8 @@ public class MemoryStorageEngine {
     public ConcurrentMap<KeyTimestampPair,Long> timesPerVersion = Maps.newConcurrentMap();
     public ConcurrentMap<String,Long> latestTime = Maps.newConcurrentMap();
     
-    private ConcurrentMap<String,Long> last = Maps.newConcurrentMap();
    
-                                                                                    
-    public long getLastTimestamp(final String key){
-        return (this.last.containsKey(key)) ? this.last.get(key) : Timestamp.NO_TIMESTAMP;
-    }
-    
+ 
     public MemoryStorageEngine() {
         // GC old versions
         new Thread(new Runnable() {
@@ -152,31 +147,15 @@ public class MemoryStorageEngine {
         }, "Storage-GC-Thread").start();
     }
 
+    //freshness functions:
+    public long freshness(String key, long timestamp){
+        KeyTimestampPair kts = this.createNewKeyTimestampPair(key, timestamp);
+        if(!this.timesPerVersion.containsKey(kts) || !this.latestTime.containsKey(key)) return 0;
+        return this.latestTime.get(key) - this.timesPerVersion.get(kts);
+    }
+
     // get last committed write for each key
     public Map<String, DataItem> getAll(Collection<String> keys) throws KaijuException {
-        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
-            HashMap<String, DataItem> results = Maps.newHashMap();
-            for(String key : keys) {
-                long timestamp = getLastTimestamp(key);
-                DataItem item;
-                if(timestamp == Timestamp.NO_TIMESTAMP)
-                    item = getLatestItemForKey(key);
-                else
-                    item = getByTimestamp(key, timestamp);
-                if(item != null && item.getTransactionKeys() != null){
-                    if(!this.last.containsKey(key) || this.last.get(key) < item.getTimestamp()){
-                        synchronized(this){
-                            this.last.put(key,item.getTimestamp());
-                            item.getTransactionKeys().forEach(i -> {
-                                if(!this.last.containsKey(i) || this.last.get(i) < item.getTimestamp()) this.last.put(i, item.getTimestamp());
-                            });
-                        }
-                    }
-                }
-                results.put(key, item);
-            }
-            return results;
-        }
         
         HashMap<String, DataItem> results = Maps.newHashMap();
 
@@ -266,7 +245,7 @@ public class MemoryStorageEngine {
             logger.warn("No suitable value found for key " + key
                                                + " version " + requiredTimestamp);
         else if(Config.getConfig().freshness_test == 1){
-            long t = this.latestTime.get(key) - this.timesPerVersion.get(this.createNewKeyTimestampPair(key, requiredTimestamp));
+            long t = this.freshness(key, requiredTimestamp);
             logger.warn("Round 2 Freshness for key: " + key + " timestamp: " + requiredTimestamp + " = " + t);
         }
         return ret;
@@ -279,7 +258,7 @@ public class MemoryStorageEngine {
         for(long candidateStamp : inputTimestampList) {
             DataItem candidate = getItemByVersion(key, candidateStamp);
             if(candidate != null && Config.getConfig().freshness_test == 1){
-                long t = this.latestTime.get(key) - this.timesPerVersion.get(this.createNewKeyTimestampPair(key, candidateStamp));
+                long t = this.freshness(key, candidateStamp);
                 logger.warn("Freshness for key: " + key + " timestamp: " + candidateStamp + " = " + t);
                 return candidate;
             }
@@ -292,7 +271,7 @@ public class MemoryStorageEngine {
         if(!lastCommitForKey.containsKey(key))
             return DataItem.getNullItem();
         if(Config.getConfig().freshness_test == 1){
-            long t = this.latestTime.get(key) - this.timesPerVersion.get(this.createNewKeyTimestampPair(key, lastCommitForKey.get(key)));
+            long t = this.freshness(key, lastCommitForKey.get(key));
             logger.warn("Round 1 Freshness for key: " + key + " timestamp: " + lastCommitForKey.get(key) + " = " + t);
         }
         return getItemByVersion(key, lastCommitForKey.get(key));
@@ -314,9 +293,15 @@ public class MemoryStorageEngine {
         prepare(key, value);
         commit(key, value.getTimestamp());
     }
-
     private void commit(String key, Long timestamp) throws KaijuException {
         // put if newer
+        if(Config.getConfig().freshness_test == 1){
+            long time = System.currentTimeMillis();
+            this.timesPerVersion.putIfAbsent(this.createNewKeyTimestampPair(key, timestamp),time);
+            if(!this.latestTime.containsKey(key) || this.latestTime.get(key) < time){
+                this.latestTime.put(key, time);
+            }
+        }
         while(true) {
             Long oldCommitted = lastCommitForKey.get(key);
             if(oldCommitted == null) {
@@ -346,7 +331,6 @@ public class MemoryStorageEngine {
         // all pairs will have the same timestamp, but we still send the
         // pairs with separate timestamps because they'll be stored that way
         long timestamp = pairs.values().iterator().next().getTimestamp();
-        Map<String,Long> updateLastSet = Maps.newHashMap();
         if(abortedTxns.containsKey(timestamp)) {
             throw new AbortedException("Timestamp was already aborted pre-commit "+timestamp);
         }
@@ -356,16 +340,6 @@ public class MemoryStorageEngine {
         for(Map.Entry<String, DataItem> pair : pairs.entrySet()) {
             prepare(pair.getKey(), pair.getValue());
             pendingPairs.add(new KeyTimestampPair(pair.getKey(), pair.getValue().getTimestamp()));
-            if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
-                if(!last.containsKey(pair.getKey()) || last.get(pair.getKey()) < pair.getValue().getTimestamp()){
-                    updateLastSet.putIfAbsent(pair.getKey(), pair.getValue().getTimestamp());
-                }
-            }
-        }
-        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
-            synchronized(this){
-                last.putAll(updateLastSet);
-            }
         }
         preparedNotCommittedByStamp.put(timestamp, pendingPairs);
 
@@ -377,19 +351,10 @@ public class MemoryStorageEngine {
         if(toUpdate == null) {
             return;
         }
-        //Map<String,Long> updateLastSet = Maps.newHashMap();
+        
         for(KeyTimestampPair pair : toUpdate) {
             commit(pair.getKey(), pair.getTimestamp());
-            /*if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
-                if(!last.containsKey(pair.getKey()) || last.get(pair.getKey()) < pair.getTimestamp()){
-                    updateLastSet.putIfAbsent(pair.getKey(), pair.getTimestamp());
-                }
-            }*/
         }
-        /*if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
-            last.putAll(updateLastSet);
-        }*/
-
         preparedNotCommittedByStamp.remove(timestamp);
     }
 
