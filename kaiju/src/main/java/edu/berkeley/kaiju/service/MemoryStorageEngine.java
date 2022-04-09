@@ -240,6 +240,9 @@ public class MemoryStorageEngine {
         assert(requiredTimestamp != Timestamp.NO_TIMESTAMP);
 
         DataItem ret = getItemByVersion(key, requiredTimestamp);
+        if(ret == null){
+            ret = getHighestNotGreaterThan(key, requiredTimestamp);
+        }
 
         if(ret == null)
             logger.warn("No suitable value found for key " + key
@@ -370,7 +373,7 @@ public class MemoryStorageEngine {
     }
 
     public DataItem getHighestNotGreaterThan(String key, long timestamp) {
-        assert(isEiger);
+        //assert(isEiger);
 
         ConcurrentSkipListMap<Long, DataItem> skipListMap = eigerMap.get(key);
         if(skipListMap == null)
