@@ -26,7 +26,7 @@ import java.util.Random;
 public abstract class ReadAtomicKaijuServiceHandler implements IKaijuHandler {
     RequestDispatcher dispatcher;
     public ThreadLocal<String> cid = new ThreadLocal<String>();
-    public ThreadLocal<Integer> tid = new ThreadLocal<Integer>();
+    public ThreadLocal<Long> tid = new ThreadLocal<Long>();
     public Random random = new Random();
     public float dropCommitPercentage = Config.getConfig().drop_commit_pct;
 

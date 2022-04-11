@@ -108,8 +108,9 @@ public class FrontendServer {
         @Override
         public void run() {
             try {
-                int tid = 0;
-                String cid = Short.toString(Config.getConfig().server_id) + ":" + Long.toString(Thread.currentThread().getId());
+                long tid = 0;
+                long cid_tmp = Config.getConfig().server_id*10000 + Thread.currentThread().getId();
+                String cid = Long.toString(cid_tmp);
                 while(true) {
                     Object request = serializer.getObject();
 
