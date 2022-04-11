@@ -2,6 +2,8 @@ package edu.berkeley.kaiju.service.request.handler;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+
+import edu.berkeley.kaiju.config.Config;
 import edu.berkeley.kaiju.data.DataItem;
 import edu.berkeley.kaiju.exception.HandlerException;
 import edu.berkeley.kaiju.service.request.RequestDispatcher;
@@ -61,10 +63,16 @@ public class ReadAtomicListBasedKaijuServiceHandler extends ReadAtomicKaijuServi
                     // saw the last updated value
                     else {
                         ret.put(keyValuePair.getKey(), keyValuePair.getValue().getValue());
+                        if(Config.getConfig().ra_tester == 1){
+                            KaijuServiceHandler.logger.warn("TR: r(" + keyValuePair.getKey() + "," + ((Long)keyValuePair.getValue().getTimestamp()).toString() + "," + cid.get() + "," + tid.get() + ")");
+                        }
                     }
                 }
             }
-
+            if(Config.getConfig().ra_tester == 1){
+                for(Map.Entry<String,Long> keyValuePair : second_round_required.entrySet())
+                    KaijuServiceHandler.logger.warn("TR: r(" + keyValuePair.getKey() + "," + ((Long)keyValuePair.getValue()).toString() + "," + cid.get() + "," + tid.get() + ")");
+            }
             // weren't missing any updates!
             if(second_round_required.isEmpty())
                 return ret;

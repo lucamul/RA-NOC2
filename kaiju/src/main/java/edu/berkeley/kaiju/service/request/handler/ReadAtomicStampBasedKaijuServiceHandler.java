@@ -2,6 +2,8 @@ package edu.berkeley.kaiju.service.request.handler;
 
 import com.beust.jcommander.internal.Sets;
 import com.google.common.collect.Maps;
+
+import edu.berkeley.kaiju.config.Config;
 import edu.berkeley.kaiju.data.DataItem;
 import edu.berkeley.kaiju.exception.HandlerException;
 import edu.berkeley.kaiju.service.request.RequestDispatcher;
@@ -42,6 +44,9 @@ public class ReadAtomicStampBasedKaijuServiceHandler extends ReadAtomicKaijuServ
             for(KaijuResponse response : second_round_responses) {
                 for(Map.Entry<String, DataItem> keyValuePair : response.keyValuePairs.entrySet()) {
                     ret.put(keyValuePair.getKey(), keyValuePair.getValue().getValue());
+                    if(Config.getConfig().ra_tester == 1){
+                        KaijuServiceHandler.logger.warn("TR: r(" + keyValuePair.getKey() + "," + ((Long)keyValuePair.getValue().getTimestamp()).toString() + "," + cid.get() + "," + tid.get() + ")");
+                    }
                 }
             }
 

@@ -108,6 +108,8 @@ public class FrontendServer {
         @Override
         public void run() {
             try {
+                int tid = 0;
+                String cid = Short.toString(Config.getConfig().server_id) + ":" + Long.toString(Thread.currentThread().getId());
                 while(true) {
                     Object request = serializer.getObject();
 
@@ -117,16 +119,26 @@ public class FrontendServer {
                             return;
                         }
                     }
+
+                    if(Config.getConfig().ra_tester == 1 && Config.getConfig().isolation_level == Config.IsolationLevel.READ_ATOMIC){
+                        ((ReadAtomicKaijuServiceHandler)this.handler.handler).cid.set(cid);
+                        ((ReadAtomicKaijuServiceHandler)this.handler.handler).tid.set(tid);
+                    }
+
                     if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
                         if(request instanceof ClientGetAllRequest){
                             Timer.Context context = KaijuServiceHandler.getAllTimer.time();
                             List<String> keys = ((ClientGetAllRequest)request).keys;
                             Map<String,Long> keyPairs = Maps.newHashMap();
-                            keys.forEach(k -> {
+                            for(String k : keys){
                                 long ts = getLastTimestamp(k);
-                                if(ts != Timestamp.NO_TIMESTAMP)
-                                    keyPairs.put(k, getLastTimestamp(k));
-                            });
+                                if(ts != Timestamp.NO_TIMESTAMP){
+                                    keyPairs.put(k, ts);
+                                    if(Config.getConfig().ra_tester == 1){
+                                        KaijuServiceHandler.logger.warn("TR: r(" + k + "," + ((Long)ts).toString() + "," + cid + "," + tid + ")");
+                                    }
+                                }
+                            }
                             Collection<KaijuResponse> responses = ((ReadAtomicKaijuServiceHandler) this.handler.handler).fetch_by_version_from_server(keyPairs);
                             Map<String,byte[]> keyValuePairs = new HashMap<String,byte[]>();
                             context.stop();
@@ -138,6 +150,9 @@ public class FrontendServer {
                                     addLast(entry.getKey(), entry.getValue().getTimestamp(), entry.getValue().getTransactionKeys());
                                 }
                             }
+                            if(Config.getConfig().ra_tester == 1){
+                                tid++;
+                            }
                             ClientResponse response = new ClientGetAllResponse(keyValuePairs);
                             serializer.serialize(response);
                         }else if(request instanceof ClientPutAllRequest){
@@ -148,11 +163,18 @@ public class FrontendServer {
                                     if(canAdd(k, timestamp)) KaijuServer.last.put(k, timestamp);
                                 });
                             }
+                            if(Config.getConfig().ra_tester == 1){
+                                for(String key : keys){
+                                    KaijuServiceHandler.logger.warn("TR: w(" + key + "," + ((Long)timestamp).toString() + "," + cid + "," + tid + ")");
+                                }
+                                tid++;
+                            }
                             ClientResponse response = new ClientPutAllResponse();
                             serializer.serialize(response);
                         }
                     }else{
                         ClientResponse response = handler.processRequest((ClientRequest) request);
+                        if(Config.getConfig().ra_tester == 1) tid++;
                         serializer.serialize(response);
                     }
                 }

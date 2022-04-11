@@ -39,8 +39,7 @@ public class KaijuServiceHandler implements IKaijuHandler {
     private RequestDispatcher dispatcher;
     private LockManager manager;
     private MemoryStorageEngine storage;
-
-    private static Logger logger = LoggerFactory.getLogger(KaijuServiceHandler.class);
+    public static Logger logger = LoggerFactory.getLogger(KaijuServiceHandler.class);
 
     public static Timer getAllTimer = MetricsManager.getRegistry().timer(MetricRegistry.name(KaijuServiceHandler.class,
                                                                                        "getall-requests",

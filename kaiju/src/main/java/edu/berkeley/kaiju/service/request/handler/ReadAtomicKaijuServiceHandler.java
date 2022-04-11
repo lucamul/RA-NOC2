@@ -25,7 +25,8 @@ import java.util.Random;
 
 public abstract class ReadAtomicKaijuServiceHandler implements IKaijuHandler {
     RequestDispatcher dispatcher;
-
+    public ThreadLocal<String> cid = new ThreadLocal<String>();
+    public ThreadLocal<Integer> tid = new ThreadLocal<Integer>();
     public Random random = new Random();
     public float dropCommitPercentage = Config.getConfig().drop_commit_pct;
 
@@ -114,7 +115,11 @@ public abstract class ReadAtomicKaijuServiceHandler implements IKaijuHandler {
                     return;
                 }
             }
-
+            if(Config.getConfig().ra_tester == 1){
+                for(String key : keyValuePairs.keySet()){
+                    KaijuServiceHandler.logger.warn("TR: w(" + key + "," + ((Long)timestamp).toString() + "," + cid.get() + "," + tid.get() + ")");
+                }
+            }
             responses = dispatcher.multiRequest(requestsByServerID);
 
             KaijuResponse.coalesceErrorsIntoException(responses);
