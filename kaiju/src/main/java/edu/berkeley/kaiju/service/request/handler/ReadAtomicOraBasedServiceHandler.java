@@ -10,6 +10,7 @@ import java.util.Set;
 import com.beust.jcommander.internal.Maps;
 
 import edu.berkeley.kaiju.KaijuServer;
+import edu.berkeley.kaiju.config.Config;
 import edu.berkeley.kaiju.data.DataItem;
 import edu.berkeley.kaiju.exception.HandlerException;
 import edu.berkeley.kaiju.net.routing.OutboundRouter;
@@ -64,9 +65,7 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
 
     @Override
     public Map<String, byte[]> get_all(List<String> keys) throws HandlerException {
-
         try{
-            
             Map<Integer, Collection<String>> keysByServerID = OutboundRouter.getRouter().groupKeysByServerID(keys);
             long requestedTimestamp = getRequestedTimestamp(keysByServerID.keySet());
             Map<Integer, KaijuMessage> requestsByServerID = Maps.newHashMap();
@@ -110,11 +109,24 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
                         result.put(keyPair.getKey(), keyPair.getValue().getValue());
                 });
             }
+            if(Config.getConfig().ra_tester == 1){
+                tester_read(responses);
+            }
             return result;
         }catch(Exception e){
             throw new HandlerException("Error processing request",e);
         }
     }
+
+    private void tester_read(Collection<KaijuResponse> responses){
+        for(KaijuResponse response : responses){
+            for(Map.Entry<String,DataItem> keyValuePair : response.keyValuePairs.entrySet()){
+                if(keyValuePair != null && keyValuePair.getValue() != null && keyValuePair.getValue().getPrepTs() != Timestamp.NO_TIMESTAMP)
+                    KaijuServiceHandler.logger.warn("TR: r(" + keyValuePair.getKey() + "," + ((Long)keyValuePair.getValue().getPrepTs()).toString() + "," + cid.get() + "," + tid.get() + ")");
+            }
+        }
+    }
+
 
     public void prepare_all(Map<String, byte[]> keyValuePairs, long timestamp) throws HandlerException{
         try {
@@ -140,6 +152,11 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
             KaijuResponse.coalesceErrorsIntoException(responses);
             for(KaijuResponse response : responses){
                 addHct(response.senderID,response.getHct());
+            }
+            if(Config.getConfig().ra_tester == 1){
+                for(String key : keyValuePairs.keySet()){
+                    KaijuServiceHandler.logger.warn("TR: w(" + key + "," + ((Long)timestamp).toString() + "," + cid.get() + "," + tid.get() + ")");
+                }
             }
         } catch (Exception e) {
             throw new HandlerException("Error processing request", e);

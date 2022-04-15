@@ -143,7 +143,7 @@ public class MemoryStorageEngine {
                            (nextStamp.getExpirationTime() < (currentTime = System.currentTimeMillis())) ) {
                             dataItems.remove(nextStamp);
 
-                            if(isEiger || true)
+                            if(isEiger || Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT)
                                 eigerMap.get(nextStamp.getKey()).remove(nextStamp.getTimestamp());
                             gcWriteMeter.mark();
                             nextStamp = null;
@@ -160,6 +160,7 @@ public class MemoryStorageEngine {
 
     //freshness functions:
     public long freshness(String key, long timestamp){
+        if(timestamp == Timestamp.NO_TIMESTAMP) return 0;
         KeyTimestampPair kts = this.createNewKeyTimestampPair(key, timestamp);
         if(!this.timesPerVersion.containsKey(kts) || !this.latestTime.containsKey(key)) return 0;
         return this.latestTime.get(key) - this.timesPerVersion.get(kts);
@@ -180,7 +181,6 @@ public class MemoryStorageEngine {
         return res.getTimestamp();
     }
 
-    //TO DO: FIX THIS
     public long getHighestCommittedPerCid(String key, String cid, long requestedTimestamp){
         if(!this.keyCidVersions.containsKey(new KeyCidPair(key, cid))) return Timestamp.NO_TIMESTAMP;
 
@@ -198,22 +198,43 @@ public class MemoryStorageEngine {
     public Map<String,DataItem> getAllOra(Map<String,DataItem> keyValuePairs) throws KaijuException{
         Map<String,DataItem> results = Maps.newHashMap();
         long hct = getHCT();
-        
+
         keyValuePairs.entrySet().forEach(keyPair ->{
             long ts = getHighestCommittedPerCid(keyPair.getKey(), keyPair.getValue().getCid(), keyPair.getValue().getTimestamp());
+            DataItem item;
             if(ts != Timestamp.NO_TIMESTAMP){
-                results.put(keyPair.getKey(), new DataItem(hct, getItemByVersion(keyPair.getKey(), ts).getValue()));
+                item = new DataItem(hct, getItemByVersion(keyPair.getKey(), ts).getValue());
+                item.setPrepTs(ts);
+                results.put(keyPair.getKey(), item);
+                if(Config.getConfig().freshness_test == 1){
+                    long t = this.freshness(keyPair.getKey(), ts);
+                    logger.warn("Freshness for key: " + keyPair.getKey() + " timestamp: " + ts + " = " + t);
+                }
             }else if(keyPair.getValue().getFlag()){
-                results.put(keyPair.getKey(), new DataItem(hct, getItemByVersion(keyPair.getKey(), keyPair.getValue().getTimestamp()).getValue()));
+                item = new DataItem(hct, getItemByVersion(keyPair.getKey(), keyPair.getValue().getTimestamp()).getValue());
+                item.setPrepTs(keyPair.getValue().getTimestamp());
+                results.put(keyPair.getKey(), item);
+                if(Config.getConfig().freshness_test == 1){
+                    long t = this.freshness(keyPair.getKey(), keyPair.getValue().getTimestamp());
+                    logger.warn("Freshness for key: " + keyPair.getKey() + " timestamp: " + keyPair.getValue().getTimestamp() + " = " + t);
+                }
             }else{
                 long hts = getHighestCommittedNotGreaterThan(keyPair.getKey(), keyPair.getValue().getTimestamp(), keyPair.getValue().getPrepTs());
-                DataItem item =  getItemByVersion(keyPair.getKey(), hts);
+                item =  getItemByVersion(keyPair.getKey(), hts);
                 if(item == null || item == DataItem.getNullItem() || item.getValue() == null){
                     if(item == null) item = DataItem.getNullItem();
                     item.setTimestamp(hct);
                     results.put(keyPair.getKey(), item);
                 }else{
-                    results.put(keyPair.getKey(), new DataItem(hct,item.getValue()));
+                    DataItem  item1 =  new DataItem(hct,item.getValue());
+                    item1.setPrepTs(hts);
+                    results.put(keyPair.getKey(),item1);
+                }
+                if(Config.getConfig().freshness_test == 1){
+                    if(hts != Timestamp.NO_TIMESTAMP){
+                        long t = this.freshness(keyPair.getKey(), hts);
+                        logger.warn("Freshness for key: " + keyPair.getKey() + " timestamp: " + hts + " = " + t);
+                    }
                 }
             }
         });
@@ -309,13 +330,14 @@ public class MemoryStorageEngine {
 
         DataItem ret = getItemByVersion(key, requiredTimestamp);
         if(ret == null){
-            ret = getHighestNotGreaterThan(key, requiredTimestamp);
+            ret = DataItem.getNullItem();
+            //ret = getHighestNotGreaterThan(key, requiredTimestamp);
         }
 
         if(ret == null)
             logger.warn("No suitable value found for key " + key
                                                + " version " + requiredTimestamp);
-        else if(Config.getConfig().freshness_test == 1){
+        else if(Config.getConfig().freshness_test == 1 && ret.getTimestamp() != Timestamp.NO_TIMESTAMP){
             long t = this.freshness(key, requiredTimestamp);
             logger.warn("Round 2 Freshness for key: " + key + " timestamp: " + requiredTimestamp + " = " + t);
         }
@@ -447,7 +469,7 @@ public class MemoryStorageEngine {
     private void prepare(String key, DataItem value) {
         dataItems.put(new KeyTimestampPair(key, value.getTimestamp()), value);
 
-        if(!(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT)) {
+        if(isEiger) {
             if(!eigerMap.containsKey(key))
                 eigerMap.putIfAbsent(key, new ConcurrentSkipListMap<Long, DataItem>());
             eigerMap.get(key).put(value.getTimestamp(), value);
