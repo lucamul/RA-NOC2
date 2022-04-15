@@ -1,5 +1,7 @@
 package edu.berkeley.kaiju.service.request.message.request;
 
+import edu.berkeley.kaiju.config.Config;
+import edu.berkeley.kaiju.config.Config.ReadAtomicAlgorithm;
 import edu.berkeley.kaiju.data.DataItem;
 import edu.berkeley.kaiju.exception.KaijuException;
 import edu.berkeley.kaiju.service.LockManager;
@@ -21,6 +23,12 @@ public class PutAllRequest extends KaijuMessage implements IKaijuRequest {
     @Override
     public KaijuResponse processRequest(MemoryStorageEngine storageEngine, LockManager lockManager) throws
                                                                                                     KaijuException {
+        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
+            Map<String,DataItem> ret = storageEngine.getAllOra(keyValuePairs);
+            KaijuResponse res =  new KaijuResponse(ret);
+            res.senderID = Config.getConfig().server_id;
+            return res;
+        }
         storageEngine.putAll(keyValuePairs);
         return new KaijuResponse();
     }

@@ -40,6 +40,7 @@ public class ReadAtomicLoraBasedKaijuServiceHandler extends ReadAtomicKaijuServi
                     keyValuePairsForServer.put(key, instantiateKaijuItem(keyValuePairs.get(key),
                                                                          keyValuePairs.keySet(),
                                                                          timestamp));
+                    keyValuePairsForServer.get(key).setCid(this.cid.get());
                 }
 
                 requestsByServerID.put(serverID, new PreparePutAllRequest(keyValuePairsForServer));

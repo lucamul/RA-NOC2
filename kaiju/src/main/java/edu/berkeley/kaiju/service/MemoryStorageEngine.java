@@ -17,14 +17,18 @@ import edu.berkeley.kaiju.exception.AbortedException;
 import edu.berkeley.kaiju.exception.HandlerException;
 import edu.berkeley.kaiju.exception.KaijuException;
 import edu.berkeley.kaiju.monitor.MetricsManager;
+import edu.berkeley.kaiju.service.request.message.response.KaijuResponse;
+import edu.berkeley.kaiju.util.KeyCidPair;
 import edu.berkeley.kaiju.util.Timestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -102,6 +106,8 @@ public class MemoryStorageEngine {
     // when we get a 'commit' message, this map tells us which [Key, Timestamp] pairs were actually committed
     private ConcurrentMap<Long, List<KeyTimestampPair>> preparedNotCommittedByStamp = Maps.newConcurrentMap();
 
+    
+
     // only used in E-PCI, which requires ordering for lookups
     private ConcurrentMap<String, ConcurrentSkipListMap<Long, DataItem>> eigerMap = Maps.newConcurrentMap();
 
@@ -116,9 +122,12 @@ public class MemoryStorageEngine {
     // used for freshness:
     public ConcurrentMap<KeyTimestampPair,Long> timesPerVersion = Maps.newConcurrentMap();
     public ConcurrentMap<String,Long> latestTime = Maps.newConcurrentMap();
-    
-   
- 
+
+    // ORA:
+    private long latest = Timestamp.NO_TIMESTAMP;
+    private ConcurrentMap<KeyCidPair, Long> keyCidVersions = Maps.newConcurrentMap();
+
+
     public MemoryStorageEngine() {
         // GC old versions
         new Thread(new Runnable() {
@@ -134,10 +143,12 @@ public class MemoryStorageEngine {
                            (nextStamp.getExpirationTime() < (currentTime = System.currentTimeMillis())) ) {
                             dataItems.remove(nextStamp);
 
-                            if(isEiger)
+                            if(isEiger || true)
                                 eigerMap.get(nextStamp.getKey()).remove(nextStamp.getTimestamp());
                             gcWriteMeter.mark();
                             nextStamp = null;
+
+                            
                         } else {
                             Thread.sleep(nextStamp.getExpirationTime()-currentTime);
                         }
@@ -153,6 +164,63 @@ public class MemoryStorageEngine {
         if(!this.timesPerVersion.containsKey(kts) || !this.latestTime.containsKey(key)) return 0;
         return this.latestTime.get(key) - this.timesPerVersion.get(kts);
     }
+
+
+    public long getHighestCommittedNotGreaterThan(String key, long timestamp, long prepTimestamp){
+        if(!this.eigerMap.containsKey(key)) return Timestamp.NO_TIMESTAMP;
+
+        if(prepTimestamp < timestamp && this.dataItems.containsKey(createNewKeyTimestampPair(key, prepTimestamp))){
+            return prepTimestamp;
+        }
+
+        DataItem res =  getHighestNotGreaterThan(key, timestamp);
+        
+        if(res == null) return Timestamp.NO_TIMESTAMP;
+
+        return res.getTimestamp();
+    }
+
+    //TO DO: FIX THIS
+    public long getHighestCommittedPerCid(String key, String cid, long requestedTimestamp){
+        if(!this.keyCidVersions.containsKey(new KeyCidPair(key, cid))) return Timestamp.NO_TIMESTAMP;
+
+        Long res =  this.keyCidVersions.get(new KeyCidPair(key, cid));
+
+        if(res == null || requestedTimestamp >= res) return Timestamp.NO_TIMESTAMP;
+        
+        return res;
+    }
+
+    public long getHCT(){
+        return this.latest;
+    }
+
+    public Map<String,DataItem> getAllOra(Map<String,DataItem> keyValuePairs) throws KaijuException{
+        Map<String,DataItem> results = Maps.newHashMap();
+        long hct = getHCT();
+        
+        keyValuePairs.entrySet().forEach(keyPair ->{
+            long ts = getHighestCommittedPerCid(keyPair.getKey(), keyPair.getValue().getCid(), keyPair.getValue().getTimestamp());
+            if(ts != Timestamp.NO_TIMESTAMP){
+                results.put(keyPair.getKey(), new DataItem(hct, getItemByVersion(keyPair.getKey(), ts).getValue()));
+            }else if(keyPair.getValue().getFlag()){
+                results.put(keyPair.getKey(), new DataItem(hct, getItemByVersion(keyPair.getKey(), keyPair.getValue().getTimestamp()).getValue()));
+            }else{
+                long hts = getHighestCommittedNotGreaterThan(keyPair.getKey(), keyPair.getValue().getTimestamp(), keyPair.getValue().getPrepTs());
+                DataItem item =  getItemByVersion(keyPair.getKey(), hts);
+                if(item == null || item == DataItem.getNullItem() || item.getValue() == null){
+                    if(item == null) item = DataItem.getNullItem();
+                    item.setTimestamp(hct);
+                    results.put(keyPair.getKey(), item);
+                }else{
+                    results.put(keyPair.getKey(), new DataItem(hct,item.getValue()));
+                }
+            }
+        });
+
+        return results;
+    }
+
 
     // get last committed write for each key
     public Map<String, DataItem> getAll(Collection<String> keys) throws KaijuException {
@@ -305,6 +373,18 @@ public class MemoryStorageEngine {
                 this.latestTime.put(key, time);
             }
         }
+        
+        if((Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT)) {
+            if(!eigerMap.containsKey(key))
+                eigerMap.putIfAbsent(key, new ConcurrentSkipListMap<Long, DataItem>());
+            eigerMap.get(key).put(timestamp, dataItems.get(new KeyTimestampPair(key, timestamp)));
+            String cid = getItemByVersion(key, timestamp).getCid();
+            KeyCidPair pair = new KeyCidPair(key, cid);
+            if(!keyCidVersions.containsKey(pair) || keyCidVersions.get(pair) < timestamp){
+                keyCidVersions.put(pair, timestamp);
+            }
+        }
+
         while(true) {
             Long oldCommitted = lastCommitForKey.get(key);
             if(oldCommitted == null) {
@@ -330,10 +410,10 @@ public class MemoryStorageEngine {
             logger.warn("prepare of zero key value pairs?");
             return;
         }
-
         // all pairs will have the same timestamp, but we still send the
         // pairs with separate timestamps because they'll be stored that way
         long timestamp = pairs.values().iterator().next().getTimestamp();
+        
         if(abortedTxns.containsKey(timestamp)) {
             throw new AbortedException("Timestamp was already aborted pre-commit "+timestamp);
         }
@@ -345,7 +425,10 @@ public class MemoryStorageEngine {
             pendingPairs.add(new KeyTimestampPair(pair.getKey(), pair.getValue().getTimestamp()));
         }
         preparedNotCommittedByStamp.put(timestamp, pendingPairs);
-
+        
+        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT)
+            if(latest < timestamp) 
+                latest = timestamp;
     }
 
     public void commit(long timestamp) throws KaijuException {
@@ -364,10 +447,9 @@ public class MemoryStorageEngine {
     private void prepare(String key, DataItem value) {
         dataItems.put(new KeyTimestampPair(key, value.getTimestamp()), value);
 
-        if(isEiger) {
+        if(!(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT)) {
             if(!eigerMap.containsKey(key))
                 eigerMap.putIfAbsent(key, new ConcurrentSkipListMap<Long, DataItem>());
-
             eigerMap.get(key).put(value.getTimestamp(), value);
         }
     }

@@ -118,9 +118,10 @@ public class Config {
     public enum ReadAtomicAlgorithm { KEY_LIST,
                                       BLOOM_FILTER,
                                       TIMESTAMP,
-                                    LORA }
+                                    LORA,
+                                CONST_ORT}
     @Parameter(names = { "-read_atomic_algorithm", "-ra_algorithm"},
-               description = "Read atomic algorithm (KEY_LIST | BLOOM_FILTER | TIMESTAMP | LORA)")
+               description = "Read atomic algorithm (KEY_LIST | BLOOM_FILTER | TIMESTAMP | LORA | CONST_ORT)")
     public ReadAtomicAlgorithm readatomic_algorithm = ReadAtomicAlgorithm.KEY_LIST;
 
     /*

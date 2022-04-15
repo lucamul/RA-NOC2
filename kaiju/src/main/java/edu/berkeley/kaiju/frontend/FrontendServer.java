@@ -121,7 +121,9 @@ public class FrontendServer {
                         }
                     }
 
-                    if(Config.getConfig().ra_tester == 1 && Config.getConfig().isolation_level == Config.IsolationLevel.READ_ATOMIC){
+
+
+                    if(this.handler.handler instanceof ReadAtomicKaijuServiceHandler){
                         ((ReadAtomicKaijuServiceHandler)this.handler.handler).cid.set(cid);
                         ((ReadAtomicKaijuServiceHandler)this.handler.handler).tid.set(tid);
                     }

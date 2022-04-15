@@ -337,6 +337,8 @@ if __name__ == "__main__":
                                                             ra_algorithm = "BLOOM_FILTER"
                                                         elif(config.find("LORA") != -1):
                                                             ra_algorithm = "LORA"
+                                                        elif(config.find("CONST_ORT") != -1):
+                                                            ra_algorithm = "CONST_ORT"
                                                         else:
                                                             ra_algorithm = "TIMESTAMP"
                                                     

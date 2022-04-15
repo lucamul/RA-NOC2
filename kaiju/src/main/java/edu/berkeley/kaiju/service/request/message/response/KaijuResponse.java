@@ -25,6 +25,8 @@ public class KaijuResponse extends KaijuMessage {
 
     public List<String> errors;
 
+    public Long hct;
+
     public KaijuResponse(Map<String, DataItem> keyValuePairs) {
         this.keyValuePairs = keyValuePairs;
     }
@@ -47,6 +49,13 @@ public class KaijuResponse extends KaijuMessage {
 
     public KaijuResponse() {}
 
+    public void setHct(long hct){
+        this.hct = hct;
+    }
+
+    public long getHct(){
+        return this.hct;
+    }
     public boolean hasErrors() {
         return errors != null;
     }

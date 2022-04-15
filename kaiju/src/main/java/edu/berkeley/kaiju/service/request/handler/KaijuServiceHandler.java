@@ -71,6 +71,8 @@ public class KaijuServiceHandler implements IKaijuHandler {
                     handler = new ReadAtomicBloomBasedKaijuServiceHandler(dispatcher);
                 } else if (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
                     handler = new ReadAtomicLoraBasedKaijuServiceHandler(dispatcher);
+                }else if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
+                    handler = new ReadAtomicOraBasedServiceHandler(dispatcher);
                 }
                 break;
             case LWLR:
@@ -121,7 +123,7 @@ public class KaijuServiceHandler implements IKaijuHandler {
 
     public void put_all(Map<String, byte[]> values) throws HandlerException {
         Timer.Context context = putAllTimer.time();
-        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
+        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA || Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
             long timestamp = Timestamp.assignNewTimestamp();
             try {
                 handler.prepare_all(values, timestamp);
@@ -130,6 +132,7 @@ public class KaijuServiceHandler implements IKaijuHandler {
                 throw e;
             } finally {
                     context.stop();
+                    if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT) ((ReadAtomicOraBasedServiceHandler)this.handler).addPrep(values.keySet(),timestamp);
                     CompletableFuture.runAsync(()->{
                         try{
                             handler.commit_all(values, timestamp);
