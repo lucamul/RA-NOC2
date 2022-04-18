@@ -36,7 +36,7 @@ public class Config {
     */
     @Parameter(names = "-tester",
                description = "enter 1 if you want to test RA")
-    public Integer ra_tester = 1;
+    public Integer ra_tester = 0;
     /*
      Freshness test
     */

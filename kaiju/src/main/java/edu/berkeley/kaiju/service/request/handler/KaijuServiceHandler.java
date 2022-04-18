@@ -4,6 +4,8 @@ import com.google.common.collect.Maps;
 import com.yammer.metrics.MetricRegistry;
 import com.google.common.collect.Lists;
 import com.yammer.metrics.Timer;
+
+import edu.berkeley.kaiju.KaijuServer;
 import edu.berkeley.kaiju.config.Config;
 import edu.berkeley.kaiju.config.Config.ReadAtomicAlgorithm;
 import edu.berkeley.kaiju.data.DataItem;
@@ -140,6 +142,11 @@ public class KaijuServiceHandler implements IKaijuHandler {
                         e.printStackTrace();
                         e.printStackTrace(System.out);
                     }});
+                    if(Config.getConfig().ra_tester == 1 && Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
+                        for(String key : values.keySet()){
+                            KaijuServiceHandler.logger.warn("TR: w(" + key + "," + ((Long)timestamp).toString() + "," + ((ReadAtomicKaijuServiceHandler)this.handler).cid.get() + "," + ((ReadAtomicKaijuServiceHandler)this.handler).cid.get() + ")");
+                        }
+                    }
                 }
         }else{
             try {

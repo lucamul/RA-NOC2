@@ -4,6 +4,9 @@ import com.google.common.collect.Lists;
 import com.yammer.metrics.Meter;
 import com.yammer.metrics.MetricRegistry;
 import com.yammer.metrics.Timer;
+
+import edu.berkeley.kaiju.config.Config;
+import edu.berkeley.kaiju.config.Config.ReadAtomicAlgorithm;
 import edu.berkeley.kaiju.exception.KaijuException;
 import edu.berkeley.kaiju.monitor.MetricsManager;
 import edu.berkeley.kaiju.service.LockManager;
@@ -130,7 +133,10 @@ public class RequestExecutor implements Runnable {
         } else if(message instanceof GetAllRequest) {
             context = getAllTimer.time();
         } else if(message instanceof PutAllRequest) {
-            context = putAllTimer.time();
+            if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT)
+                context = getAllTimer.time();
+            else
+                context = putAllTimer.time();
         } else if(message instanceof GetTimestampsRequest) {
             context = getTimestampsTimer.time();
         } else if(message instanceof GetAllByTimestampRequest) {

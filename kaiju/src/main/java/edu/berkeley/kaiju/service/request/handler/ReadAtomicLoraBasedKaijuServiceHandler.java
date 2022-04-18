@@ -2,6 +2,8 @@ package edu.berkeley.kaiju.service.request.handler;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+
+import edu.berkeley.kaiju.KaijuServer;
 import edu.berkeley.kaiju.config.Config;
 import edu.berkeley.kaiju.data.DataItem;
 import edu.berkeley.kaiju.data.ItemVersion;
@@ -13,9 +15,12 @@ import edu.berkeley.kaiju.service.request.message.KaijuMessage;
 import edu.berkeley.kaiju.service.request.message.request.*;
 import edu.berkeley.kaiju.service.request.message.response.KaijuResponse;
 import edu.berkeley.kaiju.util.Timestamp;
+
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentMap;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -27,25 +32,43 @@ public class ReadAtomicLoraBasedKaijuServiceHandler extends ReadAtomicKaijuServi
         super(dispatcher);
     }
 
+    public boolean canAdd(String key, long timestamp){
+        return (!KaijuServer.last.containsKey(key) || KaijuServer.last.get(key) < timestamp);
+    }
+
+    private void addLast(String key, long timestamp, Collection<String> transactionKeys){
+        if(canAdd(key, timestamp)){
+            synchronized(this){
+                KaijuServer.last.put(key, timestamp);
+                transactionKeys.forEach(k -> {
+                    if(canAdd(k, timestamp)) KaijuServer.last.put(k, timestamp);
+                });
+            }
+        }
+    }
+
+    private long getLastTimestamp(String key){
+        return KaijuServer.last.getOrDefault(key, Timestamp.NO_TIMESTAMP);
+    }
+
     public void prepare_all(Map<String, byte[]> keyValuePairs, long timestamp) throws HandlerException{
         try {
             // generate a timestamp for this transaction
             // group keys by responsible server.
             Map<Integer, Collection<String>> keysByServerID = OutboundRouter.getRouter().groupKeysByServerID(keyValuePairs.keySet());
             Map<Integer, KaijuMessage> requestsByServerID = Maps.newHashMap();
-
-            for(int serverID : keysByServerID.keySet()) {
-                Map<String, DataItem> keyValuePairsForServer = Maps.newHashMap();
-                for(String key : keysByServerID.get(serverID)) {
-                    keyValuePairsForServer.put(key, instantiateKaijuItem(keyValuePairs.get(key),
-                                                                         keyValuePairs.keySet(),
-                                                                         timestamp));
-                    keyValuePairsForServer.get(key).setCid(this.cid.get());
+            synchronized(this){
+                for(int serverID : keysByServerID.keySet()) {
+                    Map<String, DataItem> keyValuePairsForServer = Maps.newHashMap();
+                    for(String key : keysByServerID.get(serverID)) {
+                        keyValuePairsForServer.put(key, instantiateKaijuItem(keyValuePairs.get(key),
+                                                                            keyValuePairs.keySet(),
+                                                                            timestamp));
+                        if(canAdd(key, timestamp)) KaijuServer.last.put(key, timestamp);
+                    }
+                    requestsByServerID.put(serverID, new PreparePutAllRequest(keyValuePairsForServer));
                 }
-
-                requestsByServerID.put(serverID, new PreparePutAllRequest(keyValuePairsForServer));
             }
-
             // execute the prepare phase and check for errors
             Collection<KaijuResponse> responses = dispatcher.multiRequest(requestsByServerID);
             KaijuResponse.coalesceErrorsIntoException(responses);
@@ -80,8 +103,8 @@ public class ReadAtomicLoraBasedKaijuServiceHandler extends ReadAtomicKaijuServi
             if(requestsByServerID.isEmpty()) {
                 return;
             }
-            Collection<KaijuResponse> responses1 = dispatcher.multiRequest(requestsByServerID);
-            KaijuResponse.coalesceErrorsIntoException(responses1);
+            Collection<KaijuResponse> responses = dispatcher.multiRequest(requestsByServerID);
+            KaijuResponse.coalesceErrorsIntoException(responses);
         }catch(Exception e){
             throw new HandlerException("Error processing request",e);
         }
@@ -89,18 +112,30 @@ public class ReadAtomicLoraBasedKaijuServiceHandler extends ReadAtomicKaijuServi
 
     public Map<String,byte[]> get_all(List<String> keys) throws HandlerException{
         try{
+            Map<String,Long> keyPairs = Maps.newHashMap();
+                            
+            keys.forEach(k -> {
+                long ts = getLastTimestamp(k);
+                if(ts != Timestamp.NO_TIMESTAMP)
+                    keyPairs.put(k, getLastTimestamp(k));
+            });
+
+            Collection<KaijuResponse> responses = fetch_by_version_from_server(keyPairs);
+            Map<String,byte[]> keyValuePairs = new HashMap<String,byte[]>();
             
-            Collection<KaijuResponse> responses = fetch_from_server(keys);
-            Map<String,byte[]> ret = Maps.newHashMap();
-
-
             for(KaijuResponse response : responses){
-                for(Map.Entry<String,DataItem> keyValuePair : response.keyValuePairs.entrySet()){
-                    if(keyValuePair == null || keyValuePair.getValue() == null || keyValuePair.getKey() == null || keyValuePair.getValue().getValue() == null) continue;
-                    ret.put(keyValuePair.getKey(), keyValuePair.getValue().getValue());
+                for(Map.Entry<String,DataItem> entry : response.keyValuePairs.entrySet()){
+                    if(entry == null || entry.getValue() == null || entry.getValue().getValue() == null) continue;
+                    keyValuePairs.put(entry.getKey(), entry.getValue().getValue());
+                    if(entry.getValue().getTransactionKeys() == null) continue;
+                    addLast(entry.getKey(), entry.getValue().getTimestamp(), entry.getValue().getTransactionKeys());
                 }
             }
-            return ret;
+            if(Config.getConfig().ra_tester == 1){
+                for(Map.Entry<String,Long> entry : keyPairs.entrySet())
+                    KaijuServiceHandler.logger.warn("TR: r(" + entry.getKey() + "," + ((Long)entry.getValue()).toString() + "," + cid.get() + "," + ((Long)tid.get()).toString() + ")");
+            }
+            return keyValuePairs;
         }catch(Exception e){
             throw new HandlerException("Error processing request",e);
         }
