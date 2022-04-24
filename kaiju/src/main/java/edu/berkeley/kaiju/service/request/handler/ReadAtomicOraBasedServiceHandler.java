@@ -77,7 +77,7 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
                     if(!KaijuServer.prep.containsKey(key)){
                         item.setFlag(false);
                         item.setTimestamp(requestedTimestamp);
-                        item.setCid(this.cid.get());
+                        item.setCid(Config.getConfig().server_id.toString());
                         keyValuePairsForServer.put(key, item);
                         continue;
                     }
@@ -91,7 +91,7 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
                         item.setFlag(false);
                         item.setPrepTs(prepTimestamp);
                     }
-                    item.setCid(this.cid.get());
+                    item.setCid(Config.getConfig().server_id.toString());
                     keyValuePairsForServer.put(key, item);
                 }
         
@@ -141,7 +141,7 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
                     keyValuePairsForServer.put(key, instantiateKaijuItem(keyValuePairs.get(key),
                                                                          keyValuePairs.keySet(),
                                                                          timestamp));
-                    keyValuePairsForServer.get(key).setCid(this.cid.get());
+                    keyValuePairsForServer.get(key).setCid(Config.getConfig().server_id.toString());
                 }
 
                 requestsByServerID.put(serverID, new PreparePutAllRequest(keyValuePairsForServer));
