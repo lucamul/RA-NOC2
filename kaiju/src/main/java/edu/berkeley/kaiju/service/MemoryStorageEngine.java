@@ -33,6 +33,7 @@ import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
 
 /*
@@ -105,7 +106,7 @@ public class MemoryStorageEngine {
     private ConcurrentMap<String, Long> lastCommitForKey = Maps.newConcurrentMap();
 
     // when we get a 'commit' message, this map tells us which [Key, Timestamp] pairs were actually committed
-    private ConcurrentSkipListMap<Long, List<KeyTimestampPair>> preparedNotCommittedByStamp = new ConcurrentSkipListMap<Long, List<KeyTimestampPair>>();
+    private ConcurrentMap<Long, List<KeyTimestampPair>> preparedNotCommittedByStamp = Maps.newConcurrentMap();
 
     
 
@@ -128,7 +129,7 @@ public class MemoryStorageEngine {
     private long latest = Timestamp.NO_TIMESTAMP;
     private long latest_prep = Timestamp.NO_TIMESTAMP;
     private ConcurrentMap<KeyCidPair, Long> keyCidVersions = Maps.newConcurrentMap();
-
+    private ConcurrentSkipListSet<Long> prep = new ConcurrentSkipListSet<Long>();
 
     public MemoryStorageEngine() {
         // GC old versions
@@ -464,7 +465,8 @@ public class MemoryStorageEngine {
         preparedNotCommittedByStamp.put(timestamp, pendingPairs);
         
         if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
-            Long lat = this.preparedNotCommittedByStamp.lastKey();
+            this.prep.add(timestamp);
+            Long lat = this.prep.last();
             if(lat > latest_prep) latest_prep = lat;
         }
     }
@@ -481,7 +483,8 @@ public class MemoryStorageEngine {
         }
         preparedNotCommittedByStamp.remove(timestamp);
         if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
-            this.latest_prep = this.preparedNotCommittedByStamp.lastKey();
+            this.prep.remove(timestamp);
+            this.latest_prep = this.prep.last();
             if(timestamp > latest) latest = timestamp;
         }
     }
