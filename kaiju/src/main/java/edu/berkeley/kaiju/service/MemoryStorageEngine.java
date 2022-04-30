@@ -23,6 +23,7 @@ import edu.berkeley.kaiju.util.Timestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.sql.Time;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -104,7 +105,7 @@ public class MemoryStorageEngine {
     private ConcurrentMap<String, Long> lastCommitForKey = Maps.newConcurrentMap();
 
     // when we get a 'commit' message, this map tells us which [Key, Timestamp] pairs were actually committed
-    private ConcurrentMap<Long, List<KeyTimestampPair>> preparedNotCommittedByStamp = Maps.newConcurrentMap();
+    private ConcurrentSkipListMap<Long, List<KeyTimestampPair>> preparedNotCommittedByStamp = new ConcurrentSkipListMap<Long, List<KeyTimestampPair>>();
 
     
 
@@ -125,6 +126,7 @@ public class MemoryStorageEngine {
 
     // ORA:
     private long latest = Timestamp.NO_TIMESTAMP;
+    private long latest_prep = Timestamp.NO_TIMESTAMP;
     private ConcurrentMap<KeyCidPair, Long> keyCidVersions = Maps.newConcurrentMap();
 
 
@@ -166,6 +168,12 @@ public class MemoryStorageEngine {
         return this.latestTime.get(key) - this.timesPerVersion.get(kts);
     }
 
+    public long freshness_ORA(String key, long timestamp, long late){
+        if(timestamp == Timestamp.NO_TIMESTAMP) return 0;
+        KeyTimestampPair kts = this.createNewKeyTimestampPair(key, timestamp);
+        if(!this.timesPerVersion.containsKey(kts) || late == -1) return 0;
+        return late - this.timesPerVersion.get(kts);
+    }
 
     public long getHighestCommittedNotGreaterThan(String key, long timestamp, long prepTimestamp){
         if(!this.eigerMap.containsKey(key)) return Timestamp.NO_TIMESTAMP;
@@ -192,14 +200,20 @@ public class MemoryStorageEngine {
     }
 
     public long getHCT(){
+        if(!this.preparedNotCommittedByStamp.isEmpty()) return this.latest_prep;
         return this.latest;
     }
 
     public Map<String,DataItem> getAllOra(Map<String,DataItem> keyValuePairs) throws KaijuException{
         Map<String,DataItem> results = Maps.newHashMap();
         long hct = getHCT();
-
-        keyValuePairs.entrySet().forEach(keyPair ->{
+        Map<String,Long> f = Maps.newHashMap();
+        if(Config.getConfig().freshness_test == 1){
+            for(String key : keyValuePairs.keySet()){
+                f.put(key, this.latestTime.getOrDefault(key, Timestamp.NO_TIMESTAMP));
+            }
+        }
+        for(Map.Entry<String,DataItem> keyPair : keyValuePairs.entrySet()){
             long ts = getHighestCommittedPerCid(keyPair.getKey(), keyPair.getValue().getCid(), keyPair.getValue().getTimestamp());
             DataItem item;
             if(ts != Timestamp.NO_TIMESTAMP){
@@ -207,7 +221,7 @@ public class MemoryStorageEngine {
                 item.setPrepTs(ts);
                 results.put(keyPair.getKey(), item);
                 if(Config.getConfig().freshness_test == 1){
-                    long t = this.freshness(keyPair.getKey(), ts);
+                    long t = this.freshness_ORA(keyPair.getKey(), ts, f.get(keyPair.getKey()));
                     logger.warn("Freshness for key: " + keyPair.getKey() + " timestamp: " + ts + " = " + t);
                 }
             }else if(keyPair.getValue().getFlag()){
@@ -215,7 +229,7 @@ public class MemoryStorageEngine {
                 item.setPrepTs(keyPair.getValue().getTimestamp());
                 results.put(keyPair.getKey(), item);
                 if(Config.getConfig().freshness_test == 1){
-                    long t = this.freshness(keyPair.getKey(), keyPair.getValue().getTimestamp());
+                    long t = this.freshness_ORA(keyPair.getKey(), keyPair.getValue().getTimestamp(), f.get(keyPair.getKey()));
                     logger.warn("Freshness for key: " + keyPair.getKey() + " timestamp: " + keyPair.getValue().getTimestamp() + " = " + t);
                 }
             }else{
@@ -232,13 +246,12 @@ public class MemoryStorageEngine {
                 }
                 if(Config.getConfig().freshness_test == 1){
                     if(hts != Timestamp.NO_TIMESTAMP){
-                        long t = this.freshness(keyPair.getKey(), hts);
+                        long t = this.freshness_ORA(keyPair.getKey(), hts, f.get(keyPair.getKey()));
                         logger.warn("Freshness for key: " + keyPair.getKey() + " timestamp: " + hts + " = " + t);
                     }
                 }
             }
-        });
-
+        }
         return results;
     }
 
@@ -440,6 +453,8 @@ public class MemoryStorageEngine {
             throw new AbortedException("Timestamp was already aborted pre-commit "+timestamp);
         }
 
+        
+
         List<KeyTimestampPair> pendingPairs = Lists.newArrayList();
 
         for(Map.Entry<String, DataItem> pair : pairs.entrySet()) {
@@ -448,9 +463,10 @@ public class MemoryStorageEngine {
         }
         preparedNotCommittedByStamp.put(timestamp, pendingPairs);
         
-        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT)
-            if(latest < timestamp) 
-                latest = timestamp;
+        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
+            Long lat = this.preparedNotCommittedByStamp.lastKey();
+            if(lat > latest_prep) latest_prep = lat;
+        }
     }
 
     public void commit(long timestamp) throws KaijuException {
@@ -464,6 +480,10 @@ public class MemoryStorageEngine {
             commit(pair.getKey(), pair.getTimestamp());
         }
         preparedNotCommittedByStamp.remove(timestamp);
+        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
+            this.latest_prep = this.preparedNotCommittedByStamp.lastKey();
+            if(timestamp > latest) latest = timestamp;
+        }
     }
 
     private void prepare(String key, DataItem value) {

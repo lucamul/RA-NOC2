@@ -23,16 +23,16 @@ KAIJU_HOSTS_INTERNAL=""
 KAIJU_HOSTS_EXTERNAL=""
 netCmd = "sudo sysctl net.ipv4.tcp_syncookies=1 > /dev/null; sudo sysctl net.core.netdev_max_backlog=250000 > /dev/null; sudo ifconfig ens3 txqueuelen 10000000; sudo sysctl net.core.somaxconn=100000 > /dev/null ; sudo sysctl net.core.netdev_max_backlog=10000000 > /dev/null; sudo sysctl net.ipv4.tcp_max_syn_backlog=1000000 > /dev/null; sudo sysctl -w net.ipv4.ip_local_port_range='1024 64000' > /dev/null; sudo sysctl -w net.ipv4.tcp_fin_timeout=2 > /dev/null; "
 #these lists are IP addresses, not sure if internal or ext-net, will  try both
-clients_list = ["10.254.1.170",
-                "10.254.2.63",
-                "10.254.1.46",
-                "10.254.3.184",
-                "10.254.2.160"]
-server_list = ["10.254.1.19",
-               "10.254.1.47",
-               "10.254.2.214",
-               "10.254.3.47",
-               "10.254.2.103"]
+clients_list = ["10.254.1.50",
+"10.254.1.121",
+"10.254.2.109",
+"10.254.1.237",
+"10.254.1.235"]
+server_list = ["10.254.0.30",
+"10.254.2.169",
+"10.254.3.88",
+"10.254.0.74",
+"10.254.3.72"]
 
 
 
