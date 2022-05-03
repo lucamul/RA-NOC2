@@ -4,3 +4,14 @@ sudo apt update
 sudo apt install -y default-jdk
 sudo apt install -y pssh
 sudo apt install -y maven
+
+
+for host:
+
+ssh-keygen -t rsa -N "" -f /home/ubuntu/.ssh/id_rsa
+sudo apt update
+sudo apt install -y default-jdk
+sudo apt install -y pssh
+sudo apt install -y maven
+sudo apt-get install -y sshpass
+for h in list the nodes ; { sshpass -p "enter password" ssh-copy-id ubuntu@$h: ; }

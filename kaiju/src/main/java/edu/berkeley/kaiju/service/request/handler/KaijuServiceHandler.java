@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 public class KaijuServiceHandler implements IKaijuHandler {
     public IKaijuHandler handler;
@@ -138,7 +139,7 @@ public class KaijuServiceHandler implements IKaijuHandler {
                     CompletableFuture.runAsync(()->{
                         try{
                             handler.commit_all(values, timestamp);
-                    }catch(Exception e){
+                    }catch(HandlerException e){
                         e.printStackTrace();
                         e.printStackTrace(System.out);
                     }});

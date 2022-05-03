@@ -74,14 +74,15 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
                 Map<String, DataItem> keyValuePairsForServer = Maps.newHashMap();
                 for(String key : keysByServerID.get(serverID)) {
                     DataItem item = new DataItem();
-                    if(!KaijuServer.prep.containsKey(key)){
+                    long prepTimestamp = KaijuServer.prep.getOrDefault(key,Timestamp.NO_TIMESTAMP);
+                    if(prepTimestamp == Timestamp.NO_TIMESTAMP){
                         item.setFlag(false);
                         item.setTimestamp(requestedTimestamp);
                         item.setCid(Config.getConfig().server_id.toString());
                         keyValuePairsForServer.put(key, item);
                         continue;
                     }
-                    long prepTimestamp = KaijuServer.prep.get(key);
+                    
 
                     if(requestedTimestamp < prepTimestamp){
                         item.setFlag(true);

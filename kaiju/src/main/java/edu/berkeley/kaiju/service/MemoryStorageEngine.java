@@ -173,7 +173,9 @@ public class MemoryStorageEngine {
         if(timestamp == Timestamp.NO_TIMESTAMP) return 0;
         KeyTimestampPair kts = this.createNewKeyTimestampPair(key, timestamp);
         if(!this.timesPerVersion.containsKey(kts) || late == -1) return 0;
-        return late - this.timesPerVersion.get(kts);
+        long f = late - this.timesPerVersion.get(kts);
+        if(f < 0) return 0;
+        else return f;
     }
 
     public long getHighestCommittedNotGreaterThan(String key, long timestamp, long prepTimestamp){
@@ -466,8 +468,8 @@ public class MemoryStorageEngine {
         
         if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
             this.prep.add(timestamp);
-            Long lat = this.prep.last();
-            if(lat > latest_prep) latest_prep = lat;
+            Long lat = this.prep.first();
+            latest_prep = lat;
         }
     }
 
@@ -484,7 +486,8 @@ public class MemoryStorageEngine {
         preparedNotCommittedByStamp.remove(timestamp);
         if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
             this.prep.remove(timestamp);
-            this.latest_prep = this.prep.last();
+            if(!this.prep.isEmpty()) this.latest_prep = this.prep.first();
+            else this.latest_prep = Timestamp.NO_TIMESTAMP;
             if(timestamp > latest) latest = timestamp;
         }
     }
