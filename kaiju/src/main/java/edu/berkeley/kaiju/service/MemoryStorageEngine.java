@@ -404,13 +404,6 @@ public class MemoryStorageEngine {
     }
     private void commit(String key, Long timestamp) throws KaijuException {
         // put if newer
-        if(Config.getConfig().freshness_test == 1){
-            long time = System.currentTimeMillis();
-            this.timesPerVersion.putIfAbsent(this.createNewKeyTimestampPair(key, timestamp),time);
-            if(!this.latestTime.containsKey(key) || this.latestTime.get(key) < time){
-                this.latestTime.put(key, time);
-            }
-        }
         
         if((Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT)) {
             if(!eigerMap.containsKey(key))
@@ -490,6 +483,17 @@ public class MemoryStorageEngine {
             else this.latest_prep = Timestamp.NO_TIMESTAMP;
             if(timestamp > latest) latest = timestamp;
         }
+        if(Config.getConfig().freshness_test == 1){
+            long time = System.currentTimeMillis();
+            for(KeyTimestampPair pair : toUpdate){
+                String key = pair.key;
+                this.timesPerVersion.putIfAbsent(this.createNewKeyTimestampPair(key, timestamp),time);
+                if(!this.latestTime.containsKey(key) || this.latestTime.get(key) < time){
+                    this.latestTime.put(key, time);
+                }
+            }
+        }
+        
     }
 
     private void prepare(String key, DataItem value) {
