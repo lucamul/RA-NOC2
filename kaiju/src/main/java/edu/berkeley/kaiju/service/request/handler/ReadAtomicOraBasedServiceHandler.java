@@ -196,7 +196,11 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
                 addHct(response.senderID,response.getHct());
             }
             removePrep(keyValuePairs.keySet(), timestamp);
-
+            synchronized(this){
+                 for(int server : requestsByServerID.keySet()){
+                     addHct(server, timestamp);
+                 }
+            }
         }catch(Exception e){
             throw new HandlerException("Error processing request",e);
         }
