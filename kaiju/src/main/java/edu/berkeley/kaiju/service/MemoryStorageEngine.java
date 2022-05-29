@@ -12,7 +12,6 @@ import edu.berkeley.kaiju.config.Config.IsolationLevel;
 import edu.berkeley.kaiju.config.Config.ReadAtomicAlgorithm;
 import edu.berkeley.kaiju.data.DataItem;
 import edu.berkeley.kaiju.data.ItemVersion;
-import edu.berkeley.kaiju.data.LastValue;
 import edu.berkeley.kaiju.exception.AbortedException;
 import edu.berkeley.kaiju.exception.HandlerException;
 import edu.berkeley.kaiju.exception.KaijuException;
@@ -111,7 +110,7 @@ public class MemoryStorageEngine {
     
 
     // only used in E-PCI, which requires ordering for lookups
-    private ConcurrentMap<String, ConcurrentSkipListMap<Long, DataItem>> eigerMap = Maps.newConcurrentMap();
+    private Map<String, ConcurrentSkipListMap<Long, DataItem>> eigerMap = Maps.newConcurrentMap();
 
     // used in CTP
     private ConcurrentMap<Long, Boolean> abortedTxns = Maps.newConcurrentMap();
@@ -128,7 +127,7 @@ public class MemoryStorageEngine {
     // ORA:
     private long latest = Timestamp.NO_TIMESTAMP;
     private long latest_prep = Timestamp.NO_TIMESTAMP;
-    private ConcurrentMap<KeyCidPair, Long> keyCidVersions = Maps.newConcurrentMap();
+    private Map<KeyCidPair, Long> keyCidVersions = Maps.newConcurrentMap();
     private ConcurrentSkipListSet<Long> prep = new ConcurrentSkipListSet<Long>();
 
     public MemoryStorageEngine() {
@@ -147,7 +146,12 @@ public class MemoryStorageEngine {
                             dataItems.remove(nextStamp);
 
                             if(isEiger || Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT)
-                                eigerMap.get(nextStamp.getKey()).remove(nextStamp.getTimestamp());
+                                if(eigerMap.containsKey(nextStamp.getKey()))
+                                    eigerMap.get(nextStamp.getKey()).remove(nextStamp.getTimestamp());
+                            if(preparedNotCommittedByStamp.containsKey(nextStamp.getTimestamp())){
+                                preparedNotCommittedByStamp.remove(nextStamp.getTimestamp());
+                                prep.remove(nextStamp.getTimestamp());
+                            }
                             gcWriteMeter.mark();
                             nextStamp = null;
 
@@ -180,16 +184,14 @@ public class MemoryStorageEngine {
 
     public long getHighestCommittedNotGreaterThan(String key, long timestamp, long prepTimestamp){
         if(!this.eigerMap.containsKey(key)) return Timestamp.NO_TIMESTAMP;
-
         if(prepTimestamp < timestamp && this.dataItems.containsKey(createNewKeyTimestampPair(key, prepTimestamp))){
             return prepTimestamp;
         }
-
-        DataItem res =  getHighestNotGreaterThan(key, timestamp);
+        Map.Entry<Long,DataItem> res = this.eigerMap.get(key).floorEntry(timestamp);
         
         if(res == null) return Timestamp.NO_TIMESTAMP;
 
-        return res.getTimestamp();
+        return res.getValue().getTimestamp();
     }
 
     public long getHighestCommittedPerCid(String key, String cid, long requestedTimestamp){
@@ -228,6 +230,15 @@ public class MemoryStorageEngine {
                     logger.warn("Freshness for key: " + keyPair.getKey() + " timestamp: " + ts + " = " + t);
                 }
             }else if(keyPair.getValue().getFlag()){
+                if(!dataItems.containsKey(new KeyTimestampPair(keyPair.getKey(), keyPair.getValue().getTimestamp()))){
+                    item = DataItem.getNullItem();
+                    results.put(keyPair.getKey(), item);
+                    if(Config.getConfig().freshness_test == 1){
+                        long t = this.freshness_ORA(keyPair.getKey(), keyPair.getValue().getTimestamp(), f.get(keyPair.getKey()));
+                        logger.warn("Freshness for key: " + keyPair.getKey() + " timestamp: " + keyPair.getValue().getTimestamp() + " = " + t);
+                    }
+                    continue;
+                }
                 item = new DataItem(hct, getItemByVersion(keyPair.getKey(), keyPair.getValue().getTimestamp()).getValue());
                 item.setPrepTs(keyPair.getValue().getTimestamp());
                 results.put(keyPair.getKey(), item);
@@ -257,7 +268,6 @@ public class MemoryStorageEngine {
         }
         return results;
     }
-
 
     // get last committed write for each key
     public Map<String, DataItem> getAll(Collection<String> keys) throws KaijuException {
@@ -387,7 +397,7 @@ public class MemoryStorageEngine {
     }
 
     private DataItem getItemByVersion(String key, long timestamp) {
-        return dataItems.get(new KeyTimestampPair(key,  timestamp));
+        return dataItems.getOrDefault(new KeyTimestampPair(key,  timestamp),DataItem.getNullItem());
     }
 
     public void putAll(Map<String, DataItem> pairs) throws KaijuException {
@@ -404,8 +414,8 @@ public class MemoryStorageEngine {
     }
     private void commit(String key, Long timestamp) throws KaijuException {
         // put if newer
-        
-        if((Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT)) {
+        if(!dataItems.containsKey(new KeyTimestampPair(key,timestamp))) return;
+        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT) {
             if(!eigerMap.containsKey(key))
                 eigerMap.putIfAbsent(key, new ConcurrentSkipListMap<Long, DataItem>());
             eigerMap.get(key).put(timestamp, dataItems.get(new KeyTimestampPair(key, timestamp)));
@@ -467,8 +477,10 @@ public class MemoryStorageEngine {
     }
 
     public void commit(long timestamp) throws KaijuException {
+        if((!preparedNotCommittedByStamp.containsKey(timestamp))) return;
+        
         List<KeyTimestampPair> toUpdate = preparedNotCommittedByStamp.get(timestamp);
-       
+        
         if(toUpdate == null) {
             return;
         }
@@ -498,7 +510,7 @@ public class MemoryStorageEngine {
 
     private void prepare(String key, DataItem value) {
         dataItems.put(new KeyTimestampPair(key, value.getTimestamp()), value);
-
+        markPreparedForGC(key,value.getTimestamp());
         if(isEiger) {
             if(!eigerMap.containsKey(key))
                 eigerMap.putIfAbsent(key, new ConcurrentSkipListMap<Long, DataItem>());
@@ -550,6 +562,13 @@ public class MemoryStorageEngine {
         candidatesForGarbageCollection.add(stamp);
     }
 
+    private void markPreparedForGC(String key, long timestamp){
+        KeyTimestampPair stamp = new KeyTimestampPair(key,
+                                                      timestamp,
+                                                      System.currentTimeMillis()+gcTimeMs);
+        candidatesForGarbageCollection.add(stamp);
+    }
+
     public KeyTimestampPair createNewKeyTimestampPair(String key, long timestamp){
         return new KeyTimestampPair(key,timestamp);
     }
@@ -573,11 +592,11 @@ public class MemoryStorageEngine {
             return expirationTime;
         }
 
-        private String getKey() {
+        public String getKey() {
             return key;
         }
 
-        private long getTimestamp() {
+        public long getTimestamp() {
             return timestamp;
         }
 

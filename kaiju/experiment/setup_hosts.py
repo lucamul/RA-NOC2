@@ -18,21 +18,68 @@ from os import system
 from time import sleep
 SERVERS_PER_HOST = 1
 THRIFT_PORT = 8080
-KAIJU_PORT=9081
+KAIJU_PORT=8081
 KAIJU_HOSTS_INTERNAL=""
 KAIJU_HOSTS_EXTERNAL=""
 netCmd = "sudo sysctl net.ipv4.tcp_syncookies=1 > /dev/null; sudo sysctl net.core.netdev_max_backlog=250000 > /dev/null; sudo ifconfig ens3 txqueuelen 10000000; sudo sysctl net.core.somaxconn=100000 > /dev/null ; sudo sysctl net.core.netdev_max_backlog=10000000 > /dev/null; sudo sysctl net.ipv4.tcp_max_syn_backlog=1000000 > /dev/null; sudo sysctl -w net.ipv4.ip_local_port_range='1024 64000' > /dev/null; sudo sysctl -w net.ipv4.tcp_fin_timeout=2 > /dev/null; "
-#these lists are IP addresses, not sure if internal or ext-net, will  try both
-clients_list = ["10.254.0.5",
-                "10.254.0.208",
-                "10.254.3.153",
-                "10.254.1.51",
-                "10.254.3.4"]
-server_list = ["10.254.0.182",
-                "10.254.2.99",
-                "10.254.0.114",
-                "10.254.2.87",
-                "10.254.3.46"]
+
+
+#list of clients and servers IP addresses
+
+clients_list = [
+"10.254.1.227"
+,"10.254.2.206"
+,"10.254.1.101"
+,"10.254.2.89"
+,"10.254.0.47"
+]
+server_list = [
+"10.254.0.164"
+,"10.254.1.120"
+,"10.254.3.45"
+,"10.254.1.29"
+,"10.254.3.191"
+,"10.254.3.102"
+,"10.254.2.62"
+,"10.254.1.52"
+,"10.254.2.185"
+,"10.254.2.102"
+,"10.254.1.134"
+,"10.254.0.250"
+,"10.254.1.102"
+,"10.254.3.90"
+,"10.254.2.112"
+,"10.254.2.177"
+,"10.254.0.197"
+,"10.254.0.230"
+,"10.254.0.194"
+,"10.254.1.138"
+,"10.254.0.112"
+,"10.254.1.162"
+,"10.254.2.224"
+,"10.254.3.170"
+,"10.254.1.176"
+,"10.254.0.189"
+,"10.254.1.146"
+,"10.254.2.33"
+,"10.254.0.82"
+,"10.254.3.110"
+,"10.254.1.161"
+,"10.254.2.65"
+,"10.254.1.215"
+,"10.254.1.212"
+,"10.254.0.99"
+,"10.254.2.212"
+,"10.254.2.119"
+,"10.254.2.15"
+,"10.254.2.60"
+,"10.254.1.183"
+,"10.254.1.66"
+,"10.254.2.52"
+,"10.254.1.221"
+,"10.254.3.1"
+,"10.254.1.245"
+]
 
 
 
@@ -41,7 +88,7 @@ def start_servers(**kwargs):
     HEADER += netCmd
     baseCmd = "java -XX:+UseParallelGC  \
      -Djava.library.path=/usr/local/lib \
-     -Dlog4j.configuration=/home/ubuntu/kaiju/src/main/resources/log4j.properties \
+     -Dlog4j.configuration=file:/home/ubuntu/kaiju/src/main/resources/log4j.properties \
      -jar target/kaiju-1.0-SNAPSHOT.jar \
      -bootstrap_time %d \
      -kaiju_port %d \
@@ -87,7 +134,7 @@ def start_servers(**kwargs):
 def setup_hosts():
     pprint("Appending authorized key...")
     run_cmd("all-hosts", "sudo chown ubuntu /etc/security/limits.conf; sudo chmod u+w /etc/security/limits.conf; sudo echo '* soft nofile 1000000\n* hard nofile 1000000' >> /etc/security/limits.conf; sudo chown ubuntu /etc/pam.d/common-session; sudo echo 'session required pam_limits.so' >> /etc/pam.d/common-session")
-    run_cmd("all-hosts", "cat /home/ubuntu/.ssh/kaiju_rsa.pub >> /home/ubuntu/.ssh/authorized_keys", user="ubuntu")
+    #run_cmd("all-hosts", "cat /home/ubuntu/.ssh/kaiju_rsa.pub >> /home/ubuntu/.ssh/authorized_keys", user="ubuntu")
     pprint("Done")
 
     run_cmd("all-hosts", " wget --output-document sigar.tar.gz 'http://downloads.sourceforge.net/project/sigar/sigar/1.6/hyperic-sigar-1.6.4.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fsigar%2Ffiles%2Fsigar%2F1.6%2F&ts=1375479576&use_mirror=iweb'; tar -xvf sigar*; sudo rm /usr/local/lib/libsigar*; sudo cp ./hyperic-sigar-1.6.4/sigar-bin/lib/libsigar-amd64-linux.so /usr/local/lib/; rm -rf *sigar*")
@@ -168,8 +215,9 @@ def start_ycsb_clients(**kwargs):
         return (('cd /home/ubuntu/kaiju/contrib/YCSB;' +
                  netCmd+
                  'rm *.log;' \
-                     'bin/ycsb %s kaiju -p hosts=%s -threads %d -p txnlen=%d -p readproportion=%s -p updateproportion=%s -p fieldlength=%d -p histogram.buckets=%d -p fieldcount=1 -p operationcount=100000000 -p recordcount=%d -p isolation_level=%s -p read_atomic_algorithm=%s -t -s -p requestdistribution=%s -p maxexecutiontime=%d -P %s') 
-                     % (                              
+                     'bin/ycsb %s kaiju -p hosts=%s -threads %d -p txnlen=%d -p readproportion=%s -p updateproportion=%s -p fieldlength=%d -p histogram.buckets=%d -p fieldcount=1 -p operationcount=100000000 -p recordcount=%d -p isolation_level=%s -p read_atomic_algorithm=%s -t -s -p requestdistribution=%s -p maxexecutiontime=%d -P %s' \
+                     ' 1>%s_out.log 2>%s_err.log' 
+                     )% (                              
                             runType,
                             KAIJU_HOSTS_EXTERNAL,
                                                       kwargs.get("threads", 10) if runType != 'load' else min(1000, kwargs.get("recordcount")/10),
@@ -179,11 +227,14 @@ def start_ycsb_clients(**kwargs):
                                                       kwargs.get("valuesize", 1),
                                                       kwargs.get("numbuckets", 10000),
                                                       kwargs.get("recordcount", 10000),
-                                                      kwargs.get("isolation_level", "READ_COMMITTED"),
-                                                      kwargs.get("ra_algorithm", "KEY_LIST"),
+                                                      kwargs.get("isolation_level", "READ_ATOMIC"),
+                                                      kwargs.get("ra_algorithm", "TIMESTAMP"),
                             kwargs.get("keydistribution", "zipfian"),
                             kwargs.get("time", 60) if runType != 'load' else 10000,
-                            kwargs.get("workload", "workloads/workloada")))
+                            kwargs.get("workload", "workloads/workloada"),
+                            runType,runType
+                            )
+                            )
     ip_client = clients_list[0]
     pprint("Loading YCSB on single client: %s." % (ip_client))
     run_cmd_single(ip_client, fmt_ycsb_string("load"), time=kwargs.get("recordcount", 180))
@@ -298,51 +349,77 @@ if __name__ == "__main__":
         setup_hosts()
         jumpstart_hosts()
     if args.experiment:
-        firstrun = True
         tag = args.tag
-        iteration = 0
-        readprop = 0.95
-        numkeys = 1000000
-        valuesize = 1
-        txnlen = 4
-        threads = 1000
-        drop_commit_pct = 0
-        check_commit_delay = -1
+        experiment = experiments[args.experiment]
+
         args.output_dir=args.output_dir+"/"+args.experiment+"-"+str(datetime.now()).replace(" ", "-").replace(":","-").split(".")[0]
 
         system("mkdir -p "+args.output_dir)
         system("cp experiments.py "+args.output_dir)
-        
-        nc = 5
-        ns = 5
-        config = "READ_ATOMIC_STAMP"
-        run_ycsb_trial(tag, runid=("%s-%d-THREADS%d-RPROP%s-VS%d-TXN%d-NC%s-NS%s-NK%d-DCP%f-CCD%d-IT%d" % (config,
-                                                                                                            txnlen,
-                                                                                                            threads,
-                                                                                                            readprop,
-                                                                                                            valuesize,
-                                                                                                            txnlen,
-                                                                                                            nc,
-                                                                                                            ns,
-                                                                                                            numkeys,
-                                                                                                            drop_commit_pct,
-                                                                                                            check_commit_delay,
-                                                                                                            iteration)),
-                                                               bootstrap_time_ms=10000,
-                                                               threads=1000,
-                                                               txnlen=4,
-                                                               readprop=0.95,
-                                                               recordcount=1000000,
-                                                               time=60,
-                                                               timeout=120*10000,
-                                                               ra_algorithm = "TIMESTAMP",
-                                                               isolation_level = "READ_ATOMIC",
-                                                               keydistribution= "zipfian",
-                                                               valuesize=1,
-                                                               numbuckets=100,
-                                                               metrics_printrate=-1,
-                                                               killservers=firstrun,
-                                                               drop_commit_pct=drop_commit_pct,
-                                                               check_commit_delay=check_commit_delay,
-                                                               bgrun=False)
-        
+
+        for nc, ns in experiment["serversList"]:
+            args.servers = ns
+            args.clients = nc
+    
+            for iteration in experiment["iterations"]:
+                firstrun = True
+                for readprop in experiment["readprop"]:
+                    for numkeys in experiment["numkeys"]:
+                        for valuesize in experiment["valuesize"]:
+                            for txnlen in experiment["txnlen"]:
+                                for threads in experiment["threads"]:
+                                    for drop_commit_pct in experiment["drop_commit_pcts"]:
+                                        for check_commit_delay in experiment["check_commit_delays"]:
+                                            for config in experiment["configs"]:
+                                                for distribution in experiment["keydistribution"]:
+                                                
+                                                    isolation_level = config
+                                                    ra_algorithm = "KEY_LIST"
+                                                    
+                                                    if(config.find("READ_ATOMIC") != -1):
+                                                        isolation_level = "READ_ATOMIC"
+                                                        if(config.find("LIST") != -1):
+                                                            ra_algorithm = "KEY_LIST"
+                                                        elif(config.find("BLOOM") != -1):
+                                                            ra_algorithm = "BLOOM_FILTER"
+                                                        elif(config.find("LORA") != -1):
+                                                            ra_algorithm = "LORA"
+                                                        elif(config.find("CONST_ORT") != -1):
+                                                            ra_algorithm = "CONST_ORT"
+                                                        elif(config.find("NOC") != -1):
+                                                            ra_algorithm = "NOC"
+                                                        else:
+                                                            ra_algorithm = "TIMESTAMP"
+                                                    
+                                                    firstrun = True
+                                                    run_ycsb_trial(tag, runid=("%s-%d-THREADS%d-RPROP%s-VS%d-TXN%d-NC%s-NS%s-NK%d-DCP%f-CCD%d-IT%d-KD%s" % (config,
+                                                                                                                                                    txnlen,
+                                                                                                                                                threads,
+                                                                                                                                                readprop,
+                                                                                                                                                valuesize,
+                                                                                                                                                txnlen,
+                                                                                                                                                nc,
+                                                                                                                                                ns,
+                                                                                                                                                numkeys,
+                                                                                                                                                drop_commit_pct,
+                                                                                                                                                check_commit_delay,
+                                                                                                                                                iteration,
+                                                                                                                                                distribution)),
+                                                                bootstrap_time_ms=experiment["bootstrap_time_ms"],
+                                                                threads=threads,
+                                                                txnlen=txnlen,
+                                                                readprop=readprop,
+                                                                recordcount=numkeys,
+                                                                time=experiment["numseconds"],
+                                                                timeout=120*10000,
+                                                                ra_algorithm = ra_algorithm,
+                                                                isolation_level = isolation_level,
+                                                                keydistribution=distribution,
+                                                                valuesize=valuesize,
+                                                                numbuckets=100,
+                                                                metrics_printrate=-1,
+                                                                killservers=firstrun,
+                                                                drop_commit_pct=drop_commit_pct,
+                                                                check_commit_delay=check_commit_delay,
+                                                                bgrun=experiment["launch_in_bg"])
+                                                    firstrun = False

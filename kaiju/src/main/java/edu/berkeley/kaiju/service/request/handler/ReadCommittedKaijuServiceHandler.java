@@ -51,6 +51,34 @@ public class ReadCommittedKaijuServiceHandler implements IKaijuHandler {
         }
     }
 
+    @Override
+    public void prepare_all(Map<String, byte[]> keyValuePairs, long timestamp) throws HandlerException {
+        try {
+            Map<Integer, Collection<String>> keysByServerID = OutboundRouter.getRouter().groupKeysByServerID(keyValuePairs.keySet());
+            Map<Integer, KaijuMessage> requestsByServerID = Maps.newHashMap();
+            for(int serverID : keysByServerID.keySet()) {
+                Map<String, DataItem> keyValuePairsForServer = Maps.newHashMap();
+                for(String key : keysByServerID.get(serverID)) {
+                    keyValuePairsForServer.put(key, new DataItem(timestamp, keyValuePairs.get(key)));
+                }
+
+                requestsByServerID.put(serverID, new PutAllRequest(keyValuePairsForServer));
+            }
+
+            Collection<KaijuResponse> responses = dispatcher.multiRequest(requestsByServerID);
+
+            KaijuResponse.coalesceErrorsIntoException(responses);
+        } catch (Exception e) {
+            throw new HandlerException("Error processing request", e);
+        }
+    }
+    
+    @Override
+    public void commit_all(Map<String, byte[]> keyValuePairs, long timestamp) throws HandlerException {
+        return;
+    }
+
+
     public void put_all(Map<String, byte[]> keyValuePairs) throws HandlerException {
         try {
             Map<Integer, Collection<String>> keysByServerID = OutboundRouter.getRouter().groupKeysByServerID(keyValuePairs.keySet());

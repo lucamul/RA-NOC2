@@ -23,7 +23,6 @@ public class MultiMessageCallback implements IMessageCallback {
     // TODO: add method for a timed block
     public Collection<KaijuResponse> blockForResponses() throws InterruptedException {
         responseSemaphore.acquireUninterruptibly(numMessages);
-
         return responses;
     }
 

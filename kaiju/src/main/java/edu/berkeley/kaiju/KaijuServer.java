@@ -13,12 +13,15 @@ import edu.berkeley.kaiju.service.request.RequestDispatcher;
 import edu.berkeley.kaiju.service.request.RequestExecutorFactory;
 import edu.berkeley.kaiju.service.request.eiger.EigerExecutor;
 import edu.berkeley.kaiju.service.request.handler.KaijuServiceHandler;
+import edu.berkeley.kaiju.service.MemoryStorageEngine.KeyTimestampPair;
+import com.google.common.collect.Queues;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
 
 import com.google.common.collect.Maps;
 
@@ -44,7 +47,7 @@ public class KaijuServer {
         RequestDispatcher dispatcher = new RequestDispatcher(requestExecutorFactory);
         requestExecutorFactory.setEigerExecutor(new EigerExecutor(dispatcher, storage));
         new CooperativeCommitter(storage, new KaijuServiceHandler(dispatcher, storage, lockManager));
-
+        
         try {
             InboundMessagingService.start(dispatcher);
         } catch (IOException e) {

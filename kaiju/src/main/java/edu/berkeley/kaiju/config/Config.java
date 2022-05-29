@@ -119,9 +119,10 @@ public class Config {
                                       BLOOM_FILTER,
                                       TIMESTAMP,
                                     LORA,
-                                CONST_ORT}
+                                CONST_ORT,
+                            NOC}
     @Parameter(names = { "-read_atomic_algorithm", "-ra_algorithm"},
-               description = "Read atomic algorithm (KEY_LIST | BLOOM_FILTER | TIMESTAMP | LORA | CONST_ORT)")
+               description = "Read atomic algorithm (KEY_LIST | BLOOM_FILTER | TIMESTAMP | LORA | CONST_ORT | NOC)")
     public ReadAtomicAlgorithm readatomic_algorithm = ReadAtomicAlgorithm.KEY_LIST;
 
     /*

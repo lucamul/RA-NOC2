@@ -71,7 +71,11 @@ lora_debug = {
                     "threads" : [1000],
                     "numseconds" : 60,
                     "configs" : [
-                                  "READ_ATOMIC_CONST_ORT",
+                                  #"READ_ATOMIC_CONST_ORT",
+                                  #"READ_ATOMIC_LORA",
+                                  #"READ_ATOMIC_LIST",
+                                  "READ_ATOMIC_NOC",
+                                  "READ_ATOMIC_STAMP",
                                 ],
                     "readprop" : [.95],
                     "iterations" : range(0,1),

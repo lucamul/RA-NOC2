@@ -27,7 +27,7 @@ public class PreparePutAllRequest extends KaijuMessage implements IKaijuRequest 
     public KaijuResponse processRequest(MemoryStorageEngine storageEngine, LockManager lockManager) throws
                                                                                                     KaijuException {
         storageEngine.prepare(keyValuePairs);
-        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
+        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT || Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.NOC){
             KaijuResponse response = new KaijuResponse();
             response.setHct(storageEngine.getHCT());
             response.senderID = Config.getConfig().server_id;

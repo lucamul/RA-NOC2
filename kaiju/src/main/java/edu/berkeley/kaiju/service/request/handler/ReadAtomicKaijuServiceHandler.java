@@ -186,4 +186,77 @@ public abstract class ReadAtomicKaijuServiceHandler implements IKaijuHandler {
             throw new HandlerException("Error processing request", e);
         }
     }
+
+   
+    @Override
+    public void prepare_all(Map<String, byte[]> keyValuePairs, long timestamp) throws HandlerException {
+        try {
+            
+            // group keys by responsible server.
+            Map<Integer, Collection<String>> keysByServerID = OutboundRouter.getRouter().groupKeysByServerID(keyValuePairs.keySet());
+            Map<Integer, KaijuMessage> requestsByServerID = Maps.newHashMap();
+
+            for(int serverID : keysByServerID.keySet()) {
+                Map<String, DataItem> keyValuePairsForServer = Maps.newHashMap();
+                for(String key : keysByServerID.get(serverID)) {
+                    keyValuePairsForServer.put(key, instantiateKaijuItem(keyValuePairs.get(key),
+                                                                         keyValuePairs.keySet(),
+                                                                         timestamp));
+                }
+
+                requestsByServerID.put(serverID, new PreparePutAllRequest(keyValuePairsForServer));
+            }
+
+            // execute the prepare phase and check for errors
+            Collection<KaijuResponse> responses = dispatcher.multiRequest(requestsByServerID);
+            KaijuResponse.coalesceErrorsIntoException(responses);
+        } catch (Exception e) {
+            throw new HandlerException("Error processing request", e);
+        }
+    }
+
+
+    @Override
+    public void commit_all(Map<String, byte[]> keyValuePairs, long timestamp) throws HandlerException {
+        try {
+            // generate a timestamp for this transaction
+            // group keys by responsible server.
+            Map<Integer, Collection<String>> keysByServerID = OutboundRouter.getRouter().groupKeysByServerID(keyValuePairs.keySet());
+            Map<Integer, KaijuMessage> requestsByServerID = Maps.newHashMap();
+
+            requestsByServerID.clear();
+            for(int serverID : keysByServerID.keySet()) {
+                requestsByServerID.put(serverID,  new CommitPutAllRequest(timestamp));
+            }
+            // this is only for the experiment in Section 5.3 and will trigger CTP
+            if(dropCommitPercentage != 0 && random.nextFloat() < dropCommitPercentage) {
+                int size = keysByServerID.size();
+                int item = random.nextInt(size);
+                int i = 0;
+                for(int serverID : keysByServerID.keySet())
+                {
+                    if (i == item) {
+                        requestsByServerID.remove(serverID);
+                        break;
+                    }
+
+                    i++;
+                }
+
+                if(requestsByServerID.isEmpty()) {
+                    return;
+                }
+            }
+            if(Config.getConfig().ra_tester == 1){
+                for(String key : keyValuePairs.keySet()){
+                    KaijuServiceHandler.logger.warn("TR: w(" + key + "," + ((Long)timestamp).toString() + "," + cid.get() + "," + tid.get() + ")");
+                }
+            }
+            Collection<KaijuResponse> responses = dispatcher.multiRequest(requestsByServerID);
+
+            KaijuResponse.coalesceErrorsIntoException(responses);
+        } catch (Exception e) {
+            throw new HandlerException("Error processing request", e);
+        }
+    }
 }

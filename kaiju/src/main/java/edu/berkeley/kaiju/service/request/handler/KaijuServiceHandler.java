@@ -76,6 +76,8 @@ public class KaijuServiceHandler implements IKaijuHandler {
                     handler = new ReadAtomicLoraBasedKaijuServiceHandler(dispatcher);
                 }else if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
                     handler = new ReadAtomicOraBasedServiceHandler(dispatcher);
+                }else if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.NOC){
+                    handler = new ReadAtomicNOCBasedKaijuServiceHandler(dispatcher);
                 }
                 break;
             case LWLR:
@@ -135,7 +137,7 @@ public class KaijuServiceHandler implements IKaijuHandler {
                 throw e;
             } finally {
                     context.stop();
-                    if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT) ((ReadAtomicOraBasedServiceHandler)this.handler).addPrep(values.keySet(),timestamp);
+                    //asynchronous commit
                     CompletableFuture.runAsync(()->{
                         try{
                             handler.commit_all(values, timestamp);
@@ -159,28 +161,6 @@ public class KaijuServiceHandler implements IKaijuHandler {
                     context.stop();
                 }
         }
-    }
-
-    public long lora_put_all(Map<String,byte[]> values) throws HandlerException{
-        Timer.Context context = putAllTimer.time();
-        long timestamp = Timestamp.assignNewTimestamp();
-        try {
-            handler.prepare_all(values, timestamp);
-        } catch(HandlerException e) {
-            logger.warn("put_all exception", e);
-            throw e;
-        } finally {
-            context.stop();
-            CompletableFuture.runAsync(()->{
-                try{
-                    handler.commit_all(values, timestamp);
-                }catch(Exception e){
-                    e.printStackTrace();
-                    e.printStackTrace(System.out);
-                }
-            });
-        }
-        return timestamp;
     }
 
     // used in CTP; probably shouldn't actually live here.

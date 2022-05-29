@@ -21,5 +21,6 @@ EXPERIMENT="{ "serversList" : [(5,5)],
                     "drop_commit_pcts" : [0],
                     "check_commit_delays" : [-1],
                  }"
+
 mkdir -p multiset
 python setup_hosts.py --color -c us-west-2 --experiment $EXPERIMENT --tag $TAG --output multitest/$EXPERIMENT

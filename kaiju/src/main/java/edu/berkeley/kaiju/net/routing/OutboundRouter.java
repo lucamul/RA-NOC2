@@ -4,8 +4,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import edu.berkeley.kaiju.config.Config;
 import edu.berkeley.kaiju.net.tcp.InternalTCPSender;
-import edu.berkeley.kaiju.util.Timestamp;
-import edu.berkeley.kaiju.data.LastValue;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;

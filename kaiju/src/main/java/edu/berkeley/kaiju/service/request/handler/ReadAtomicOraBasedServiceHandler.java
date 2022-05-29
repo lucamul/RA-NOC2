@@ -74,11 +74,11 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
                 Map<String, DataItem> keyValuePairsForServer = Maps.newHashMap();
                 for(String key : keysByServerID.get(serverID)) {
                     DataItem item = new DataItem();
+                    item.setFlag(false);
+                    item.setTimestamp(requestedTimestamp);
+                    item.setCid(Config.getConfig().server_id.toString());
                     long prepTimestamp = KaijuServer.prep.getOrDefault(key,Timestamp.NO_TIMESTAMP);
                     if(prepTimestamp == Timestamp.NO_TIMESTAMP){
-                        item.setFlag(false);
-                        item.setTimestamp(requestedTimestamp);
-                        item.setCid(Config.getConfig().server_id.toString());
                         keyValuePairsForServer.put(key, item);
                         continue;
                     }
@@ -88,11 +88,9 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
                         item.setFlag(true);
                         item.setTimestamp(prepTimestamp);
                     }else{
-                        item.setTimestamp(requestedTimestamp);
-                        item.setFlag(false);
                         item.setPrepTs(prepTimestamp);
                     }
-                    item.setCid(Config.getConfig().server_id.toString());
+
                     keyValuePairsForServer.put(key, item);
                 }
         
@@ -105,10 +103,10 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
             for(KaijuResponse response : responses){
                 long hct = response.keyValuePairs.values().iterator().next().getTimestamp();
                 addHct(response.senderID, hct);
-                response.keyValuePairs.entrySet().forEach(keyPair ->{
+                for(Map.Entry<String,DataItem> keyPair : response.keyValuePairs.entrySet()){
                     if(keyPair != null && keyPair.getValue() != null && keyPair.getValue().getValue() != null)
                         result.put(keyPair.getKey(), keyPair.getValue().getValue());
-                });
+                }
             }
             if(Config.getConfig().ra_tester == 1){
                 tester_read(responses);
@@ -154,6 +152,16 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
             for(KaijuResponse response : responses){
                 addHct(response.senderID,response.getHct());
             }
+            synchronized(this){
+                for(KaijuResponse response : responses){
+                    addHct(response.senderID,response.getHct());
+                    for(String key: keysByServerID.get(Short.toUnsignedInt(response.senderID))){
+                        if(!KaijuServer.prep.containsKey(key) || KaijuServer.prep.get(key) < timestamp)
+                        KaijuServer.prep.put(key, timestamp);
+                    }
+                }
+             }
+
             if(Config.getConfig().ra_tester == 1){
                 for(String key : keyValuePairs.keySet()){
                     KaijuServiceHandler.logger.warn("TR: w(" + key + "," + ((Long)timestamp).toString() + "," + cid.get() + "," + tid.get() + ")");
@@ -196,16 +204,23 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
                 addHct(response.senderID,response.getHct());
             }
             removePrep(keyValuePairs.keySet(), timestamp);
-            synchronized(this){
-                 for(int server : requestsByServerID.keySet()){
-                     addHct(server, timestamp);
-                 }
+            
+            for(int server : requestsByServerID.keySet()){
+                 addHct(server, timestamp);
             }
         }catch(Exception e){
             throw new HandlerException("Error processing request",e);
         }
     }
 
+    @Override
+    public void put_all(Map<String, byte[]> keyValuePairs) throws HandlerException {
+        Long timestamp = Timestamp.assignNewTimestamp();
+        prepare_all(keyValuePairs, timestamp);
+        commit_all(keyValuePairs, timestamp);
+        return;
+    }
+    
     @Override
     public DataItem instantiateKaijuItem(byte[] value, Collection<String> allKeys, long timestamp) {
         

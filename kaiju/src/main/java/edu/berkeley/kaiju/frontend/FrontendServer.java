@@ -8,6 +8,7 @@ import edu.berkeley.kaiju.KaijuServer;
 import edu.berkeley.kaiju.config.Config;
 import edu.berkeley.kaiju.config.Config.ReadAtomicAlgorithm;
 import edu.berkeley.kaiju.data.DataItem;
+import edu.berkeley.kaiju.exception.HandlerException;
 import edu.berkeley.kaiju.frontend.request.ClientGetAllRequest;
 import edu.berkeley.kaiju.frontend.request.ClientPutAllRequest;
 import edu.berkeley.kaiju.frontend.request.ClientRequest;
@@ -20,6 +21,7 @@ import edu.berkeley.kaiju.service.request.handler.ReadAtomicKaijuServiceHandler;
 import edu.berkeley.kaiju.service.request.message.response.KaijuResponse;
 import edu.berkeley.kaiju.util.KryoSerializer;
 import edu.berkeley.kaiju.util.Timestamp;
+import edu.berkeley.kaiju.service.MemoryStorageEngine.KeyTimestampPair;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,11 +33,6 @@ import java.net.InetSocketAddress;
 import java.nio.channels.Channels;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 public class FrontendServer {
     private static Logger logger = LoggerFactory.getLogger(FrontendServer.class);
@@ -50,7 +47,6 @@ public class FrontendServer {
 
     public void serve() {
         logger.info("Listening to external connections on "+serverSocket);
-
         (new FrontendConnectionServer(serverSocket, handler)).run();
     }
 
@@ -75,6 +71,7 @@ public class FrontendServer {
             }
         }
     }
+    
     private class FrontendConnectionHandler implements Runnable {
         KryoSerializer serializer = new KryoSerializer();
         KaijuServiceHandler handler = null;

@@ -5,6 +5,7 @@ import org.apache.hadoop.util.bloom.BloomFilter;
 
 import java.sql.Time;
 import java.util.Collection;
+import java.util.Map;
 
 import com.esotericsoftware.kryo.serializers.DefaultArraySerializers.BooleanArraySerializer;
 

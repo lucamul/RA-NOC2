@@ -6,8 +6,7 @@ import com.google.common.collect.Maps;
 import edu.berkeley.kaiju.KaijuServer;
 import edu.berkeley.kaiju.config.Config;
 import edu.berkeley.kaiju.data.DataItem;
-import edu.berkeley.kaiju.data.ItemVersion;
-import edu.berkeley.kaiju.data.LastValue;
+
 import edu.berkeley.kaiju.exception.HandlerException;
 import edu.berkeley.kaiju.net.routing.OutboundRouter;
 import edu.berkeley.kaiju.service.request.RequestDispatcher;
@@ -16,14 +15,11 @@ import edu.berkeley.kaiju.service.request.message.request.*;
 import edu.berkeley.kaiju.service.request.message.response.KaijuResponse;
 import edu.berkeley.kaiju.util.Timestamp;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentMap;
+
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
 
 public class ReadAtomicLoraBasedKaijuServiceHandler extends ReadAtomicKaijuServiceHandler {
