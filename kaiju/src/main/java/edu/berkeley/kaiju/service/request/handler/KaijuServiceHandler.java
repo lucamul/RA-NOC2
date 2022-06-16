@@ -2,13 +2,11 @@ package edu.berkeley.kaiju.service.request.handler;
 
 import com.google.common.collect.Maps;
 import com.yammer.metrics.MetricRegistry;
-import com.google.common.collect.Lists;
 import com.yammer.metrics.Timer;
 
-import edu.berkeley.kaiju.KaijuServer;
 import edu.berkeley.kaiju.config.Config;
+import edu.berkeley.kaiju.config.Config.IsolationLevel;
 import edu.berkeley.kaiju.config.Config.ReadAtomicAlgorithm;
-import edu.berkeley.kaiju.data.DataItem;
 import edu.berkeley.kaiju.exception.HandlerException;
 import edu.berkeley.kaiju.frontend.request.ClientGetAllRequest;
 import edu.berkeley.kaiju.frontend.request.ClientPutAllRequest;
@@ -24,18 +22,15 @@ import edu.berkeley.kaiju.service.MemoryStorageEngine;
 import edu.berkeley.kaiju.service.request.RequestDispatcher;
 import edu.berkeley.kaiju.service.request.message.KaijuMessage;
 import edu.berkeley.kaiju.service.request.message.request.CheckPreparedRequest;
-import edu.berkeley.kaiju.service.request.message.request.PutAllRequest;
 import edu.berkeley.kaiju.service.request.message.response.KaijuResponse;
 import edu.berkeley.kaiju.util.Timestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 public class KaijuServiceHandler implements IKaijuHandler {
     public IKaijuHandler handler;
@@ -128,7 +123,8 @@ public class KaijuServiceHandler implements IKaijuHandler {
 
     public void put_all(Map<String, byte[]> values) throws HandlerException {
         Timer.Context context = putAllTimer.time();
-        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA || Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
+        if(KaijuServiceHandler.is_opw()){
+            // 1Pws:
             long timestamp = Timestamp.assignNewTimestamp();
             try {
                 handler.prepare_all(values, timestamp);
@@ -145,21 +141,17 @@ public class KaijuServiceHandler implements IKaijuHandler {
                         e.printStackTrace();
                         e.printStackTrace(System.out);
                     }});
-                    if(Config.getConfig().ra_tester == 1 && Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA){
-                        for(String key : values.keySet()){
-                            KaijuServiceHandler.logger.warn("TR: w(" + key + "," + ((Long)timestamp).toString() + "," + ((ReadAtomicKaijuServiceHandler)this.handler).cid.get() + "," + ((ReadAtomicKaijuServiceHandler)this.handler).cid.get() + ")");
-                        }
-                    }
-                }
+            }
         }else{
+            // 2PWs:
             try {
                 handler.put_all(values);
             } catch(HandlerException e) {
                 logger.warn("put_all exception", e);
                 throw e;
             } finally {
-                    context.stop();
-                }
+                context.stop();
+            }
         }
     }
 
@@ -193,5 +185,16 @@ public class KaijuServiceHandler implements IKaijuHandler {
        }
 
         return true;
+    }
+
+    public static boolean is_opw(){
+        return (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA || 
+            Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT ||
+            (Config.getConfig().opw == 1 && Config.getConfig().isolation_level == IsolationLevel.READ_ATOMIC && 
+                (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.KEY_LIST
+                    || Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.TIMESTAMP
+                )
+            )
+        );
     }
 }

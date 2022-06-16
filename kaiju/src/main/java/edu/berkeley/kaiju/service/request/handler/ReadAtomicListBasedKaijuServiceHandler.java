@@ -13,7 +13,6 @@ import edu.berkeley.kaiju.util.Timestamp;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
 public class ReadAtomicListBasedKaijuServiceHandler extends ReadAtomicKaijuServiceHandler {
 

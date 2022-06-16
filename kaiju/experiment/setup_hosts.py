@@ -23,62 +23,24 @@ KAIJU_HOSTS_INTERNAL=""
 KAIJU_HOSTS_EXTERNAL=""
 netCmd = "sudo sysctl net.ipv4.tcp_syncookies=1 > /dev/null; sudo sysctl net.core.netdev_max_backlog=250000 > /dev/null; sudo ifconfig ens3 txqueuelen 10000000; sudo sysctl net.core.somaxconn=100000 > /dev/null ; sudo sysctl net.core.netdev_max_backlog=10000000 > /dev/null; sudo sysctl net.ipv4.tcp_max_syn_backlog=1000000 > /dev/null; sudo sysctl -w net.ipv4.ip_local_port_range='1024 64000' > /dev/null; sudo sysctl -w net.ipv4.tcp_fin_timeout=2 > /dev/null; "
 
+n_servers = 5
 
 #list of clients and servers IP addresses
 
 clients_list = [
-"10.254.1.227"
-,"10.254.2.206"
-,"10.254.1.101"
-,"10.254.2.89"
-,"10.254.0.47"
-]
-server_list = [
-"10.254.0.164"
-,"10.254.1.120"
+"10.254.2.6"
+,"10.254.2.154"
+,"10.254.3.203"
+,"10.254.0.221"
 ,"10.254.3.45"
-,"10.254.1.29"
-,"10.254.3.191"
-,"10.254.3.102"
-,"10.254.2.62"
-,"10.254.1.52"
-,"10.254.2.185"
-,"10.254.2.102"
-,"10.254.1.134"
-,"10.254.0.250"
-,"10.254.1.102"
-,"10.254.3.90"
-,"10.254.2.112"
-,"10.254.2.177"
-,"10.254.0.197"
-,"10.254.0.230"
-,"10.254.0.194"
-,"10.254.1.138"
-,"10.254.0.112"
-,"10.254.1.162"
-,"10.254.2.224"
+]
+
+server_list = [
+"10.254.2.38"
+,"10.254.1.48"
+,"10.254.3.141"
 ,"10.254.3.170"
-,"10.254.1.176"
-,"10.254.0.189"
-,"10.254.1.146"
-,"10.254.2.33"
-,"10.254.0.82"
-,"10.254.3.110"
-,"10.254.1.161"
-,"10.254.2.65"
-,"10.254.1.215"
-,"10.254.1.212"
-,"10.254.0.99"
-,"10.254.2.212"
-,"10.254.2.119"
-,"10.254.2.15"
-,"10.254.2.60"
-,"10.254.1.183"
-,"10.254.1.66"
-,"10.254.2.52"
-,"10.254.1.221"
-,"10.254.3.1"
-,"10.254.1.245"
+,"10.254.3.83"
 ]
 
 
@@ -107,7 +69,10 @@ def start_servers(**kwargs):
       1>server-%d.log 2>&1 & "
     setup_hosts()
     sid = 0
+    i = 0
     for server in server_list:
+        if i == n_servers:
+            break
         servercmd = HEADER
         for s_localid in range(0, SERVERS_PER_HOST):
             servercmd += (
@@ -128,6 +93,7 @@ def start_servers(**kwargs):
                    kwargs.get("locktable_numlatches", 1024),
                    s_localid))
             sid += 1
+        i += 1
         pprint("Starting kv-servers on [%s]" % server)
         start_cmd_disown_nobg(server, servercmd)
 
@@ -207,9 +173,9 @@ def run_cmd_in_kaiju(hosts, cmd, user='ubuntu'):
 def pprint(str):
     global USE_COLOR
     if USE_COLOR:
-        print '\033[94m%s\033[0m' % str
+        print ('\033[94m%s\033[0m' % str)
     else:
-        print str
+        print (str)
 def start_ycsb_clients(**kwargs):
     def fmt_ycsb_string(runType):
         return (('cd /home/ubuntu/kaiju/contrib/YCSB;' +
@@ -331,19 +297,6 @@ if __name__ == "__main__":
 
     USE_COLOR = args.color
     pprint("Reminder: Run this script from an ssh-agent!")
-    global KAIJU_HOSTS_EXTERNAL
-    global KAIJU_HOSTS_INTERNAL
-    KAIJU_HOSTS_INTERNAL = None
-    for server in server_list:
-        for loc_id in range (0,SERVERS_PER_HOST):
-            if KAIJU_HOSTS_INTERNAL:
-                KAIJU_HOSTS_INTERNAL += ","
-                KAIJU_HOSTS_EXTERNAL += ","
-            else:
-                KAIJU_HOSTS_EXTERNAL = ""
-                KAIJU_HOSTS_INTERNAL = ""
-            KAIJU_HOSTS_INTERNAL += server + ":" + str(KAIJU_PORT+loc_id)
-            KAIJU_HOSTS_EXTERNAL += server + ":" + str(THRIFT_PORT+loc_id)
     kaijuArgString = ' '.join(['-D%s' % arg for arg in args.kaiju_args])
     if args.setup or args.launch:
         setup_hosts()
@@ -360,7 +313,22 @@ if __name__ == "__main__":
         for nc, ns in experiment["serversList"]:
             args.servers = ns
             args.clients = nc
-    
+            n_servers = ns
+            KAIJU_HOSTS_INTERNAL = None
+            i = 0
+            for server in server_list:
+                if i == ns:
+                    break
+                for loc_id in range (0,SERVERS_PER_HOST):
+                    if KAIJU_HOSTS_INTERNAL:
+                        KAIJU_HOSTS_INTERNAL += ","
+                        KAIJU_HOSTS_EXTERNAL += ","
+                    else:
+                        KAIJU_HOSTS_EXTERNAL = ""
+                        KAIJU_HOSTS_INTERNAL = ""
+                    KAIJU_HOSTS_INTERNAL += server + ":" + str(KAIJU_PORT+loc_id)
+                    KAIJU_HOSTS_EXTERNAL += server + ":" + str(THRIFT_PORT+loc_id)
+                i += 1
             for iteration in experiment["iterations"]:
                 firstrun = True
                 for readprop in experiment["readprop"]:

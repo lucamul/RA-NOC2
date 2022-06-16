@@ -34,7 +34,6 @@ public class ReadAtomicBloomBasedKaijuServiceHandler extends ReadAtomicKaijuServ
             }
 
             Collections.sort(keyValuePairs);
-            DataItem highestItem = keyValuePairs.get(0).value;
             Collections.reverse(keyValuePairs);
 
             Map<String, Collection<Long>> potentialSiblings = Maps.newHashMap();

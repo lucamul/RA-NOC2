@@ -133,7 +133,7 @@ public class RequestExecutor implements Runnable {
         } else if(message instanceof GetAllRequest) {
             context = getAllTimer.time();
         } else if(message instanceof PutAllRequest) {
-            if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT)
+            if(MemoryStorageEngine.is_ORA())
                 context = getAllTimer.time();
             else
                 context = putAllTimer.time();

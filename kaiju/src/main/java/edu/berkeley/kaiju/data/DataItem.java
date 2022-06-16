@@ -24,9 +24,9 @@ public class DataItem {
     // Used in RAMP-Hybrid
     private BloomFilter bloomTransactionKeys = null;
 
-    private String cid;
-    private Boolean flag;
-    private Long prepTs = Timestamp.NO_TIMESTAMP;
+    private String cid = null;
+    private Boolean flag = null;
+    private Long prepTs = null;
 
     public DataItem(long timestamp, byte[] value) {
         this.timestamp = timestamp;
@@ -66,6 +66,7 @@ public class DataItem {
     }
     
     public boolean getFlag(){
+        if(this.flag == null) return false;
         return this.flag;
     }
 
@@ -78,6 +79,7 @@ public class DataItem {
     }
 
     public long getPrepTs(){
+        if(this.prepTs == null) return Timestamp.NO_TIMESTAMP;
         return this.prepTs;
     }
 

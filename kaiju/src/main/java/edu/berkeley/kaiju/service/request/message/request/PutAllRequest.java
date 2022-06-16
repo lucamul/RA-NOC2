@@ -23,8 +23,8 @@ public class PutAllRequest extends KaijuMessage implements IKaijuRequest {
     @Override
     public KaijuResponse processRequest(MemoryStorageEngine storageEngine, LockManager lockManager) throws
                                                                                                     KaijuException {
-        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
-            Map<String,DataItem> ret = storageEngine.getAllOra(keyValuePairs);
+        if(MemoryStorageEngine.is_ORA()){
+            Map<String,DataItem> ret = storageEngine.getAllOra(keyValuePairs, ((Short)senderID).toString());
             KaijuResponse res =  new KaijuResponse(ret);
             res.senderID = Config.getConfig().server_id;
             return res;

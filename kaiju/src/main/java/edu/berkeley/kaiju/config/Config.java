@@ -32,6 +32,12 @@ public class Config {
         return instance;
     }
     /*
+     OPW option for RAMP-F, RAMP-S
+    */
+    @Parameter(names = "-opw",
+        description = "enter 1 if you want RAMP to be with OPWs")
+    public Integer opw = 1;
+    /*
      RA tester 
     */
     @Parameter(names = "-tester",

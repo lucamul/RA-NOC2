@@ -87,7 +87,17 @@ public class MemoryStorageEngine {
                                                                                        }
                                                                                    });
 
-    private static final long gcTimeMs = Config.getConfig().overwrite_gc_ms;
+
+    /*
+     These 4 lines handle garbage collection, it is important to accurately tune the lora and RAMPF-OPW ms to avoid them reading an already collected value
+     This is because with OPWs we need to garbage collect already at prepare, in case a commit takes very long.
+     So when performing the experiments tune these parameters carefully.
+     */
+    private static final int loraMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA) ? 3 : 1;
+    private static final int fOPWMs = 4;
+    private static final long gcTimeMs = Config.getConfig().overwrite_gc_ms*loraMs;
+    private static final long gcTimePrepMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.KEY_LIST && Config.getConfig().opw == 1 && Config.getConfig().isolation_level == IsolationLevel.READ_ATOMIC) ? Config.getConfig().overwrite_gc_ms*fOPWMs : Config.getConfig().overwrite_gc_ms*loraMs;
+                                                                                   
 
     public static Logger logger = LoggerFactory.getLogger(MemoryStorageEngine.class);
 
@@ -107,7 +117,8 @@ public class MemoryStorageEngine {
     // when we get a 'commit' message, this map tells us which [Key, Timestamp] pairs were actually committed
     private ConcurrentMap<Long, List<KeyTimestampPair>> preparedNotCommittedByStamp = Maps.newConcurrentMap();
 
-    
+                                                                                   
+    private boolean tests = (Config.getConfig().freshness_test == 1 || Config.getConfig().ra_tester == 1);
 
     // only used in E-PCI, which requires ordering for lookups
     private Map<String, ConcurrentSkipListMap<Long, DataItem>> eigerMap = Maps.newConcurrentMap();
@@ -145,7 +156,7 @@ public class MemoryStorageEngine {
                            (nextStamp.getExpirationTime() < (currentTime = System.currentTimeMillis())) ) {
                             dataItems.remove(nextStamp);
 
-                            if(isEiger || Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT)
+                            if(isEiger || MemoryStorageEngine.is_ORA() || MemoryStorageEngine.is_NOC())
                                 if(eigerMap.containsKey(nextStamp.getKey()))
                                     eigerMap.get(nextStamp.getKey()).remove(nextStamp.getTimestamp());
                             if(preparedNotCommittedByStamp.containsKey(nextStamp.getTimestamp())){
@@ -184,13 +195,20 @@ public class MemoryStorageEngine {
 
     public long getHighestCommittedNotGreaterThan(String key, long timestamp, long prepTimestamp){
         if(!this.eigerMap.containsKey(key)) return Timestamp.NO_TIMESTAMP;
-        if(prepTimestamp < timestamp && this.dataItems.containsKey(createNewKeyTimestampPair(key, prepTimestamp))){
+        Map.Entry<Long,DataItem> res = this.eigerMap.get(key).floorEntry(timestamp);
+        if(res == null || (prepTimestamp > res.getValue().getTimestamp() && this.dataItems.containsKey(createNewKeyTimestampPair(key, prepTimestamp)))){
             return prepTimestamp;
         }
+        return res.getValue().getTimestamp();
+    }
+
+    public long getHighestCommittedNotGreaterThan(String key, long timestamp){
+        if(!this.eigerMap.containsKey(key)) return Timestamp.NO_TIMESTAMP;
+
         Map.Entry<Long,DataItem> res = this.eigerMap.get(key).floorEntry(timestamp);
         
         if(res == null) return Timestamp.NO_TIMESTAMP;
-
+        
         return res.getValue().getTimestamp();
     }
 
@@ -209,60 +227,56 @@ public class MemoryStorageEngine {
         return this.latest;
     }
 
-    public Map<String,DataItem> getAllOra(Map<String,DataItem> keyValuePairs) throws KaijuException{
+    public Map<String,DataItem> getAllOra(Map<String,DataItem> keyValuePairs, String cid) throws KaijuException{
         Map<String,DataItem> results = Maps.newHashMap();
         long hct = getHCT();
-        Map<String,Long> f = Maps.newHashMap();
-        if(Config.getConfig().freshness_test == 1){
-            for(String key : keyValuePairs.keySet()){
-                f.put(key, this.latestTime.getOrDefault(key, Timestamp.NO_TIMESTAMP));
-            }
-        }
-        for(Map.Entry<String,DataItem> keyPair : keyValuePairs.entrySet()){
-            long ts = getHighestCommittedPerCid(keyPair.getKey(), keyPair.getValue().getCid(), keyPair.getValue().getTimestamp());
-            DataItem item;
-            if(ts != Timestamp.NO_TIMESTAMP){
-                item = new DataItem(hct, getItemByVersion(keyPair.getKey(), ts).getValue());
-                item.setPrepTs(ts);
-                results.put(keyPair.getKey(), item);
-                if(Config.getConfig().freshness_test == 1){
-                    long t = this.freshness_ORA(keyPair.getKey(), ts, f.get(keyPair.getKey()));
-                    logger.warn("Freshness for key: " + keyPair.getKey() + " timestamp: " + ts + " = " + t);
-                }
-            }else if(keyPair.getValue().getFlag()){
-                if(!dataItems.containsKey(new KeyTimestampPair(keyPair.getKey(), keyPair.getValue().getTimestamp()))){
-                    item = DataItem.getNullItem();
+        if(tests){
+            for(Map.Entry<String,DataItem> keyPair : keyValuePairs.entrySet()){
+                long ts = getHighestCommittedPerCid(keyPair.getKey(), cid, keyPair.getValue().getTimestamp());
+                DataItem item;
+                if(ts != Timestamp.NO_TIMESTAMP){
+                    item = new DataItem(hct, getItemByVersion(keyPair.getKey(), ts).getValue());
+                    item.setPrepTs(ts);
                     results.put(keyPair.getKey(), item);
-                    if(Config.getConfig().freshness_test == 1){
-                        long t = this.freshness_ORA(keyPair.getKey(), keyPair.getValue().getTimestamp(), f.get(keyPair.getKey()));
-                        logger.warn("Freshness for key: " + keyPair.getKey() + " timestamp: " + keyPair.getValue().getTimestamp() + " = " + t);
+                }else if(keyPair.getValue().getFlag()){
+                    KeyTimestampPair kts = new KeyTimestampPair(keyPair.getKey(), keyPair.getValue().getTimestamp());
+                    if(!dataItems.containsKey(kts)){
+                        item = DataItem.getNullItem();
+                        results.put(keyPair.getKey(), item);
+                        continue;
                     }
-                    continue;
-                }
-                item = new DataItem(hct, getItemByVersion(keyPair.getKey(), keyPair.getValue().getTimestamp()).getValue());
-                item.setPrepTs(keyPair.getValue().getTimestamp());
-                results.put(keyPair.getKey(), item);
-                if(Config.getConfig().freshness_test == 1){
-                    long t = this.freshness_ORA(keyPair.getKey(), keyPair.getValue().getTimestamp(), f.get(keyPair.getKey()));
-                    logger.warn("Freshness for key: " + keyPair.getKey() + " timestamp: " + keyPair.getValue().getTimestamp() + " = " + t);
-                }
-            }else{
-                long hts = getHighestCommittedNotGreaterThan(keyPair.getKey(), keyPair.getValue().getTimestamp(), keyPair.getValue().getPrepTs());
-                item =  getItemByVersion(keyPair.getKey(), hts);
-                if(item == null || item == DataItem.getNullItem() || item.getValue() == null){
-                    if(item == null) item = DataItem.getNullItem();
-                    item.setTimestamp(hct);
+                    item = new DataItem(hct, dataItems.get(kts).getValue());
+                    item.setPrepTs(keyPair.getValue().getTimestamp());
                     results.put(keyPair.getKey(), item);
                 }else{
-                    DataItem  item1 =  new DataItem(hct,item.getValue());
-                    item1.setPrepTs(hts);
-                    results.put(keyPair.getKey(),item1);
+                    long hts = getHighestCommittedNotGreaterThan(keyPair.getKey(), keyPair.getValue().getTimestamp(), keyPair.getValue().getPrepTs());
+                    item = getItemByVersion(keyPair.getKey(), hts);
+                    item.setTimestamp(hct);
+                    results.put(keyPair.getKey(), item);
+                    item.setPrepTs(hts);
                 }
-                if(Config.getConfig().freshness_test == 1){
-                    if(hts != Timestamp.NO_TIMESTAMP){
-                        long t = this.freshness_ORA(keyPair.getKey(), hts, f.get(keyPair.getKey()));
-                        logger.warn("Freshness for key: " + keyPair.getKey() + " timestamp: " + hts + " = " + t);
-                    }
+            }
+            if(Config.getConfig().freshness_test == 1){
+                for(Map.Entry<String,DataItem> entry : results.entrySet()){
+                    long t = this.freshness_ORA(entry.getKey(), entry.getValue().getPrepTs(), this.latestTime.getOrDefault(entry.getKey(), Timestamp.NO_TIMESTAMP));
+                    logger.warn("Freshness for key: " + entry.getKey() + " timestamp: " + entry.getValue().getPrepTs() + " = " + t);
+                }
+            }
+        }else{
+            for(Map.Entry<String,DataItem> keyPair : keyValuePairs.entrySet()){
+                long ts = getHighestCommittedPerCid(keyPair.getKey(), cid, keyPair.getValue().getTimestamp());
+                DataItem item;
+                if(ts != Timestamp.NO_TIMESTAMP){
+                    item = new DataItem(hct, getItemByVersion(keyPair.getKey(), ts).getValue());
+                    results.put(keyPair.getKey(), item);
+                }else if(keyPair.getValue().getFlag()){
+                    item = new DataItem(hct, dataItems.getOrDefault(new KeyTimestampPair(keyPair.getKey(), keyPair.getValue().getTimestamp()),DataItem.getNullItem()).getValue());
+                    results.put(keyPair.getKey(), item);
+                }else{
+                    long hts = getHighestCommittedNotGreaterThan(keyPair.getKey(), keyPair.getValue().getTimestamp(), keyPair.getValue().getPrepTs());
+                    item = getItemByVersion(keyPair.getKey(), hts);
+                    item.setTimestamp(hct);
+                    results.put(keyPair.getKey(), item);
                 }
             }
         }
@@ -301,7 +315,12 @@ public class MemoryStorageEngine {
     // probably could have passed a map, in retrospect
     public Map<String, DataItem> getAllByVersion(Collection<ItemVersion> versions) throws KaijuException {
         HashMap<String, DataItem> results = Maps.newHashMap();
-
+        if(MemoryStorageEngine.is_NOC()){
+            for(ItemVersion version : versions) {
+                results.put(version.getKey(), getByTimestamp(version.getKey(), getHighestCommittedNotGreaterThan(version.getKey(), version.getTimestamp())));
+            }
+            return results;
+        }
         for(ItemVersion version : versions) {
             results.put(version.getKey(), getByTimestamp(version.getKey(), version.getTimestamp()));
         }
@@ -415,7 +434,7 @@ public class MemoryStorageEngine {
     private void commit(String key, Long timestamp) throws KaijuException {
         // put if newer
         if(!dataItems.containsKey(new KeyTimestampPair(key,timestamp))) return;
-        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT) {
+        if(MemoryStorageEngine.is_ORA()) {
             if(!eigerMap.containsKey(key))
                 eigerMap.putIfAbsent(key, new ConcurrentSkipListMap<Long, DataItem>());
             eigerMap.get(key).put(timestamp, dataItems.get(new KeyTimestampPair(key, timestamp)));
@@ -424,6 +443,10 @@ public class MemoryStorageEngine {
             if(!keyCidVersions.containsKey(pair) || keyCidVersions.get(pair) < timestamp){
                 keyCidVersions.put(pair, timestamp);
             }
+        }else if(MemoryStorageEngine.is_NOC()){
+            if(!eigerMap.containsKey(key))
+                eigerMap.putIfAbsent(key, new ConcurrentSkipListMap<Long, DataItem>());
+            eigerMap.get(key).put(timestamp, dataItems.get(new KeyTimestampPair(key, timestamp)));
         }
 
         while(true) {
@@ -469,7 +492,7 @@ public class MemoryStorageEngine {
         }
         preparedNotCommittedByStamp.put(timestamp, pendingPairs);
         
-        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
+        if(MemoryStorageEngine.is_ORA() || MemoryStorageEngine.is_NOC()){
             this.prep.add(timestamp);
             Long lat = this.prep.first();
             latest_prep = lat;
@@ -489,7 +512,7 @@ public class MemoryStorageEngine {
             commit(pair.getKey(), pair.getTimestamp());
         }
         preparedNotCommittedByStamp.remove(timestamp);
-        if(Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT){
+        if(MemoryStorageEngine.is_ORA() || MemoryStorageEngine.is_NOC()){
             this.prep.remove(timestamp);
             if(!this.prep.isEmpty()) this.latest_prep = this.prep.first();
             else this.latest_prep = Timestamp.NO_TIMESTAMP;
@@ -510,7 +533,8 @@ public class MemoryStorageEngine {
 
     private void prepare(String key, DataItem value) {
         dataItems.put(new KeyTimestampPair(key, value.getTimestamp()), value);
-        markPreparedForGC(key,value.getTimestamp());
+        if(Config.getConfig().freshness_test != 1) // freshness logging and measurement slows the system to the point that GC for these is not useful.
+            markPreparedForGC(key,value.getTimestamp()); 
         if(isEiger) {
             if(!eigerMap.containsKey(key))
                 eigerMap.putIfAbsent(key, new ConcurrentSkipListMap<Long, DataItem>());
@@ -556,6 +580,7 @@ public class MemoryStorageEngine {
     }
 
     private void markForGC(String key, long timestamp) {
+        if(Config.getConfig().freshness_test == 1) return;
         KeyTimestampPair stamp = new KeyTimestampPair(key,
                                                       timestamp,
                                                       System.currentTimeMillis()+gcTimeMs);
@@ -565,7 +590,7 @@ public class MemoryStorageEngine {
     private void markPreparedForGC(String key, long timestamp){
         KeyTimestampPair stamp = new KeyTimestampPair(key,
                                                       timestamp,
-                                                      System.currentTimeMillis()+gcTimeMs);
+                                                      System.currentTimeMillis()+gcTimePrepMs);
         candidatesForGarbageCollection.add(stamp);
     }
 
@@ -653,5 +678,13 @@ public class MemoryStorageEngine {
         lastCommitForKey.clear();
         candidatesForGarbageCollection.clear();
         isEiger = Config.getConfig().isolation_level == IsolationLevel.EIGER;
+    }
+
+    public static boolean is_ORA(){
+        return Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT;
+    }
+
+    public static boolean is_NOC(){
+        return Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.NOC;
     }
 }

@@ -45,6 +45,8 @@ public class LockBasedKaijuServiceHandler implements IKaijuHandler {
             case LWNR:
                 writeDuration = LockDuration.LONG;
                 break;
+            default:
+                break;
         }
     }
 

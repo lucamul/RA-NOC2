@@ -32,17 +32,6 @@ public class ReadAtomicLoraBasedKaijuServiceHandler extends ReadAtomicKaijuServi
         return (!KaijuServer.last.containsKey(key) || KaijuServer.last.get(key) < timestamp);
     }
 
-    private void addLast(String key, long timestamp, Collection<String> transactionKeys){
-        if(canAdd(key, timestamp)){
-            synchronized(this){
-                KaijuServer.last.put(key, timestamp);
-                transactionKeys.forEach(k -> {
-                    if(canAdd(k, timestamp)) KaijuServer.last.put(k, timestamp);
-                });
-            }
-        }
-    }
-
     private long getLastTimestamp(String key){
         return KaijuServer.last.getOrDefault(key, Timestamp.NO_TIMESTAMP);
     }
@@ -101,6 +90,11 @@ public class ReadAtomicLoraBasedKaijuServiceHandler extends ReadAtomicKaijuServi
             }
             Collection<KaijuResponse> responses = dispatcher.multiRequest(requestsByServerID);
             KaijuResponse.coalesceErrorsIntoException(responses);
+            if(Config.getConfig().ra_tester == 1){
+                for(String key : keyValuePairs.keySet()){
+                    KaijuServiceHandler.logger.warn("TR: w(" + key + "," + ((Long)timestamp).toString() + "," + this.cid.get() + "," + this.tid.get() + ")");
+                }
+            }
         }catch(Exception e){
             throw new HandlerException("Error processing request",e);
         }
@@ -124,7 +118,14 @@ public class ReadAtomicLoraBasedKaijuServiceHandler extends ReadAtomicKaijuServi
                     if(entry == null || entry.getValue() == null || entry.getValue().getValue() == null) continue;
                     keyValuePairs.put(entry.getKey(), entry.getValue().getValue());
                     if(entry.getValue().getTransactionKeys() == null) continue;
-                    addLast(entry.getKey(), entry.getValue().getTimestamp(), entry.getValue().getTransactionKeys());
+                    synchronized(this){
+                    if(canAdd(entry.getKey(), entry.getValue().getTimestamp())) KaijuServer.last.put(entry.getKey(), entry.getValue().getTimestamp());
+                        for(String key : entry.getValue().getTransactionKeys()){
+                            if(canAdd(key, entry.getValue().getTimestamp())){
+                                KaijuServer.last.put(key, entry.getValue().getTimestamp());
+                            }
+                        }
+                    }
                 }
             }
             if(Config.getConfig().ra_tester == 1){

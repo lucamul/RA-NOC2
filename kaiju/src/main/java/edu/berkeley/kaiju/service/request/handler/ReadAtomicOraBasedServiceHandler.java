@@ -1,5 +1,6 @@
 package edu.berkeley.kaiju.service.request.handler;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -66,24 +67,32 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
     @Override
     public Map<String, byte[]> get_all(List<String> keys) throws HandlerException {
         try{
-            Map<Integer, Collection<String>> keysByServerID = OutboundRouter.getRouter().groupKeysByServerID(keys);
-            long requestedTimestamp = getRequestedTimestamp(keysByServerID.keySet());
+            Map<Integer, Collection<String>> keysByServerID = Maps.newHashMap();
+            long requestedTimestamp = Long.MAX_VALUE;
+            for(String key : keys) {
+                int serverID = OutboundRouter.getRouter().getServerIDByResourceID(key.hashCode());
+                if(!keysByServerID.containsKey(serverID)){
+                    keysByServerID.put(serverID,  new ArrayList<String>());
+                    long ts = KaijuServer.hcts.getOrDefault(serverID,Long.MAX_VALUE);
+                    if(ts < requestedTimestamp){
+                        requestedTimestamp = ts;
+                    }
+                }
+                keysByServerID.get(serverID).add(key);
+            }
+            if(requestedTimestamp == Long.MAX_VALUE) requestedTimestamp = Timestamp.NO_TIMESTAMP;
             Map<Integer, KaijuMessage> requestsByServerID = Maps.newHashMap();
 
             for(int serverID : keysByServerID.keySet()) {
                 Map<String, DataItem> keyValuePairsForServer = Maps.newHashMap();
                 for(String key : keysByServerID.get(serverID)) {
                     DataItem item = new DataItem();
-                    item.setFlag(false);
                     item.setTimestamp(requestedTimestamp);
-                    item.setCid(Config.getConfig().server_id.toString());
                     long prepTimestamp = KaijuServer.prep.getOrDefault(key,Timestamp.NO_TIMESTAMP);
                     if(prepTimestamp == Timestamp.NO_TIMESTAMP){
                         keyValuePairsForServer.put(key, item);
                         continue;
                     }
-                    
-
                     if(requestedTimestamp < prepTimestamp){
                         item.setFlag(true);
                         item.setTimestamp(prepTimestamp);
@@ -104,8 +113,7 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
                 long hct = response.keyValuePairs.values().iterator().next().getTimestamp();
                 addHct(response.senderID, hct);
                 for(Map.Entry<String,DataItem> keyPair : response.keyValuePairs.entrySet()){
-                    if(keyPair != null && keyPair.getValue() != null && keyPair.getValue().getValue() != null)
-                        result.put(keyPair.getKey(), keyPair.getValue().getValue());
+                    result.put(keyPair.getKey(), keyPair.getValue().getValue());
                 }
             }
             if(Config.getConfig().ra_tester == 1){
@@ -149,9 +157,7 @@ public class ReadAtomicOraBasedServiceHandler extends ReadAtomicKaijuServiceHand
             // execute the prepare phase and check for errors
             Collection<KaijuResponse> responses = dispatcher.multiRequest(requestsByServerID);
             KaijuResponse.coalesceErrorsIntoException(responses);
-            for(KaijuResponse response : responses){
-                addHct(response.senderID,response.getHct());
-            }
+
             synchronized(this){
                 for(KaijuResponse response : responses){
                     addHct(response.senderID,response.getHct());
