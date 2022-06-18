@@ -91,10 +91,12 @@ public class MemoryStorageEngine {
     /*
      These lines take care of GC. When using OPWs it's possible that some values get collected when they should not, 
      therefore when testing you should try to tune these parameters accordingly.
-     (If a version was garbage collected the system just returns an empty item when it is read)
-     LORA seemed to suffer from this because of bad freshness, 
-     RAMP-F opws because the newest commit would some times be very old if the async commits were too slow
-     These values may vary even more depending on the experiment you are running, for example high write proportion.
+     RAMP-F correctness with GC according to the paper relies on their GC mechanism (only collecting committed values after they are not latest)
+     Which is why I increased the GC for the prepared values at an higher number to avoid this breaking and we specifically see some anomalies with OPWs 
+     when GC is on for prepared values.
+     LORA may suffer from problems where the data is not fresh enough and thus already collected, so you may want to adjust its parameter too.
+     RAMP-S and ORA do not seem to experience any anomaly in their behaviour.
+     You can adjust the values, especially when running write heavy workloads.
     */
     private static final int sOPWMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.TIMESTAMP && 
                                             Config.getConfig().opw == 1 && 
@@ -103,7 +105,7 @@ public class MemoryStorageEngine {
                                             Config.getConfig().opw == 1 && 
                                                 Config.getConfig().isolation_level == IsolationLevel.READ_ATOMIC) ? 4 : 1;
     private static final int ORAOPWMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT) ?  1 : 1;
-    private static final int LORAOPWMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA) ?  2 : 1;
+    private static final int LORAOPWMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA) ?  1 : 1;
     private static final long gcTimeMs = Config.getConfig().overwrite_gc_ms*LORAOPWMs;
     private static final long gcTimePrepMs = Config.getConfig().overwrite_gc_ms*sOPWMs*fOPWMs*ORAOPWMs;
                                                                                    
@@ -267,6 +269,7 @@ public class MemoryStorageEngine {
             }
             if(Config.getConfig().freshness_test == 1){
                 for(Map.Entry<String,DataItem> entry : results.entrySet()){
+                    if(entry.getValue().getPrepTs() == Timestamp.NO_TIMESTAMP) continue;
                     long t = this.freshness_ORA(entry.getKey(), entry.getValue().getPrepTs(), this.latestTime.getOrDefault(entry.getKey(), Timestamp.NO_TIMESTAMP));
                     logger.warn("Freshness for key: " + entry.getKey() + " timestamp: " + entry.getValue().getPrepTs() + " = " + t);
                 }
