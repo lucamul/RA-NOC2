@@ -89,14 +89,23 @@ public class MemoryStorageEngine {
 
 
     /*
-     These 4 lines handle garbage collection, it is important to accurately tune the lora and RAMPF-OPW ms to avoid them reading an already collected value
-     This is because with OPWs we need to garbage collect already at prepare, in case a commit takes very long.
-     So when performing the experiments tune these parameters carefully.
-     */
-    private static final int loraMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA) ? 3 : 1;
-    private static final int fOPWMs = 4;
-    private static final long gcTimeMs = Config.getConfig().overwrite_gc_ms*loraMs;
-    private static final long gcTimePrepMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.KEY_LIST && Config.getConfig().opw == 1 && Config.getConfig().isolation_level == IsolationLevel.READ_ATOMIC) ? Config.getConfig().overwrite_gc_ms*fOPWMs : Config.getConfig().overwrite_gc_ms*loraMs;
+     These lines take care of GC. When using OPWs it's possible that some values get collected when they should not, 
+     therefore when testing you should try to tune these parameters accordingly.
+     (If a version was garbage collected the system just returns an empty item when it is read)
+     LORA seemed to suffer from this because of bad freshness, 
+     RAMP-F opws because the newest commit would some times be very old if the async commits were too slow
+     These values may vary even more depending on the experiment you are running, for example high write proportion.
+    */
+    private static final int sOPWMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.TIMESTAMP && 
+                                            Config.getConfig().opw == 1 && 
+                                                Config.getConfig().isolation_level == IsolationLevel.READ_ATOMIC) ? 1 : 1;
+    private static final int fOPWMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.KEY_LIST && 
+                                            Config.getConfig().opw == 1 && 
+                                                Config.getConfig().isolation_level == IsolationLevel.READ_ATOMIC) ? 4 : 1;
+    private static final int ORAOPWMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT) ?  1 : 1;
+    private static final int LORAOPWMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA) ?  2 : 1;
+    private static final long gcTimeMs = Config.getConfig().overwrite_gc_ms*LORAOPWMs;
+    private static final long gcTimePrepMs = Config.getConfig().overwrite_gc_ms*sOPWMs*fOPWMs*ORAOPWMs;
                                                                                    
 
     public static Logger logger = LoggerFactory.getLogger(MemoryStorageEngine.class);

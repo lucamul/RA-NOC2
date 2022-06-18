@@ -24,23 +24,63 @@ KAIJU_HOSTS_EXTERNAL=""
 netCmd = "sudo sysctl net.ipv4.tcp_syncookies=1 > /dev/null; sudo sysctl net.core.netdev_max_backlog=250000 > /dev/null; sudo ifconfig ens3 txqueuelen 10000000; sudo sysctl net.core.somaxconn=100000 > /dev/null ; sudo sysctl net.core.netdev_max_backlog=10000000 > /dev/null; sudo sysctl net.ipv4.tcp_max_syn_backlog=1000000 > /dev/null; sudo sysctl -w net.ipv4.ip_local_port_range='1024 64000' > /dev/null; sudo sysctl -w net.ipv4.tcp_fin_timeout=2 > /dev/null; "
 
 n_servers = 5
+n_clients = 5
 
 #list of clients and servers IP addresses
-
 clients_list = [
-"10.254.2.6"
-,"10.254.2.154"
+"10.254.1.202"
+,"10.254.0.220"
+,"10.254.1.250"
+,"10.254.2.174"
+,"10.254.1.59"
+,"10.254.3.117"
+,"10.254.2.127"
+,"10.254.2.41"
+,"10.254.1.112"
+,"10.254.1.254"
+,"10.254.1.148"
+,"10.254.2.212"
+,"10.254.3.55"
+,"10.254.4.3"
+,"10.254.2.69"
+,"10.254.1.204"
+,"10.254.1.179"
+,"10.254.3.99"
+,"10.254.2.23"
 ,"10.254.3.203"
-,"10.254.0.221"
-,"10.254.3.45"
+,"10.254.2.104"
+,"10.254.3.172"
+,"10.254.1.74"
+,"10.254.3.208"
+,"10.254.1.105"
 ]
 
 server_list = [
-"10.254.2.38"
-,"10.254.1.48"
-,"10.254.3.141"
-,"10.254.3.170"
-,"10.254.3.83"
+"10.254.1.218"
+,"10.254.3.77"
+,"10.254.0.185"
+,"10.254.2.61"
+,"10.254.3.6"
+,"10.254.2.63"
+,"10.254.3.149"
+,"10.254.1.124"
+,"10.254.1.36"
+,"10.254.2.161"
+,"10.254.2.188"
+,"10.254.0.255"
+,"10.254.1.123"
+,"10.254.1.113"
+,"10.254.0.213"
+,"10.254.2.109"
+,"10.254.1.127"
+,"10.254.2.208"
+,"10.254.1.27"
+,"10.254.3.12"
+,"10.254.1.167"
+,"10.254.3.80"
+,"10.254.1.98"
+,"10.254.0.27"
+,"10.254.2.60"
 ]
 
 
@@ -237,6 +277,8 @@ def jumpstart_hosts():
     run_cmd_in_kaiju('all-hosts', 'git stash', user="ubuntu")
     pprint("Done")
 
+run_opw_RAMP = False
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Setup cassandra on EC2')
     parser.add_argument('--tag', dest='tag', required=True, help='Tag to use for your instances')
@@ -343,11 +385,13 @@ if __name__ == "__main__":
                                                 
                                                     isolation_level = config
                                                     ra_algorithm = "KEY_LIST"
-                                                    
+                                                    algo = config
                                                     if(config.find("READ_ATOMIC") != -1):
                                                         isolation_level = "READ_ATOMIC"
                                                         if(config.find("LIST") != -1):
                                                             ra_algorithm = "KEY_LIST"
+                                                            if run_opw_RAMP:
+                                                                algo = "READ_ATOMIC_FASTOPW"
                                                         elif(config.find("BLOOM") != -1):
                                                             ra_algorithm = "BLOOM_FILTER"
                                                         elif(config.find("LORA") != -1):
@@ -358,9 +402,11 @@ if __name__ == "__main__":
                                                             ra_algorithm = "NOC"
                                                         else:
                                                             ra_algorithm = "TIMESTAMP"
+                                                            if run_opw_RAMP:
+                                                                algo = "READ_ATOMIC_SMALLOPW"
                                                     
                                                     firstrun = True
-                                                    run_ycsb_trial(tag, runid=("%s-%d-THREADS%d-RPROP%s-VS%d-TXN%d-NC%s-NS%s-NK%d-DCP%f-CCD%d-IT%d-KD%s" % (config,
+                                                    run_ycsb_trial(tag, runid=("%s-%d-THREADS%d-RPROP%s-VS%d-TXN%d-NC%s-NS%s-NK%d-DCP%f-CCD%d-IT%d-KD%s" % (algo,
                                                                                                                                                     txnlen,
                                                                                                                                                 threads,
                                                                                                                                                 readprop,
