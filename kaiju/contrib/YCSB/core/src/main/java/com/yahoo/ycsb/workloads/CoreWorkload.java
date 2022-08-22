@@ -36,8 +36,10 @@ import com.yahoo.ycsb.generator.ZipfianGenerator;
 import com.yahoo.ycsb.measurements.Measurements;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Vector;
 
 /**
@@ -285,8 +287,10 @@ public class CoreWorkload extends Workload
 	
 	protected static IntegerGenerator getFieldLengthGenerator(Properties p) throws WorkloadException{
 		IntegerGenerator fieldlengthgenerator;
+		int fieldcount=Integer.parseInt(p.getProperty(FIELD_COUNT_PROPERTY,FIELD_COUNT_PROPERTY_DEFAULT));
 		String fieldlengthdistribution = p.getProperty(FIELD_LENGTH_DISTRIBUTION_PROPERTY, FIELD_LENGTH_DISTRIBUTION_PROPERTY_DEFAULT);
 		int fieldlength=Integer.parseInt(p.getProperty(FIELD_LENGTH_PROPERTY,FIELD_LENGTH_PROPERTY_DEFAULT));
+		double readproportion=Double.parseDouble(p.getProperty(READ_PROPORTION_PROPERTY,READ_PROPORTION_PROPERTY_DEFAULT));
 		String fieldlengthhistogram = p.getProperty(FIELD_LENGTH_HISTOGRAM_FILE_PROPERTY, FIELD_LENGTH_HISTOGRAM_FILE_PROPERTY_DEFAULT);
 		if(fieldlengthdistribution.compareTo("constant") == 0) {
 			fieldlengthgenerator = new ConstantIntegerGenerator(fieldlength);
@@ -300,7 +304,7 @@ public class CoreWorkload extends Workload
 			} catch(IOException e) {
 				throw new WorkloadException("Couldn't read field length histogram file: "+fieldlengthhistogram, e);
 			}
-		} else {
+		}else {
 			throw new WorkloadException("Unknown field length distribution \""+fieldlengthdistribution+"\"");
 		}
 		return fieldlengthgenerator;
@@ -402,12 +406,12 @@ public class CoreWorkload extends Workload
 		}
 		else if (requestdistrib.equals("hotspot")) 
 		{
-      double hotsetfraction = Double.parseDouble(p.getProperty(
-          HOTSPOT_DATA_FRACTION, HOTSPOT_DATA_FRACTION_DEFAULT));
-      double hotopnfraction = Double.parseDouble(p.getProperty(
-          HOTSPOT_OPN_FRACTION, HOTSPOT_OPN_FRACTION_DEFAULT));
-      keychooser = new HotspotIntegerGenerator(0, recordcount - 1, 
-          hotsetfraction, hotopnfraction);
+			double hotsetfraction = Double.parseDouble(p.getProperty(
+				HOTSPOT_DATA_FRACTION, HOTSPOT_DATA_FRACTION_DEFAULT));
+			double hotopnfraction = Double.parseDouble(p.getProperty(
+				HOTSPOT_OPN_FRACTION, HOTSPOT_OPN_FRACTION_DEFAULT));
+			keychooser = new HotspotIntegerGenerator(0, recordcount - 1, 
+				hotsetfraction, hotopnfraction);
     }
 		else
 		{
@@ -435,6 +439,7 @@ public class CoreWorkload extends Workload
  		{
  			keynum=Utils.hash(keynum);
  		}
+		
 		return "user"+keynum;
 	}
 	HashMap<String, ByteIterator> buildValues() {
@@ -650,12 +655,11 @@ public class CoreWorkload extends Workload
 	public void doTransactionUpdate(DB db)
 	{
         long accum = 0;
-
         while(db.numOperationsQueued() < transactionLength) {
             //choose a random key
-            int keynum = nextKeynum();
-
-            String keyname=buildKeyName(keynum);
+			int keynum = nextKeynum();
+			
+			String keyname=buildKeyName(keynum);
 
             HashMap<String,ByteIterator> values;
 
@@ -678,7 +682,6 @@ public class CoreWorkload extends Workload
 
             accum += en-st;
         }
-
         long st=System.nanoTime();
         int ret = db.commit();
         long en=System.nanoTime();

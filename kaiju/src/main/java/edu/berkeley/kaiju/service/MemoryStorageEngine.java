@@ -7,6 +7,8 @@ import com.google.common.collect.Queues;
 import com.yammer.metrics.Gauge;
 import com.yammer.metrics.Meter;
 import com.yammer.metrics.MetricRegistry;
+
+import edu.berkeley.kaiju.KaijuServer;
 import edu.berkeley.kaiju.config.Config;
 import edu.berkeley.kaiju.config.Config.IsolationLevel;
 import edu.berkeley.kaiju.config.Config.ReadAtomicAlgorithm;

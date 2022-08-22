@@ -24,62 +24,23 @@ defaultsettings = { "serversList" : [(5,5)],
                     "check_commit_delays" : [-1],
                  }
 
-lora_test = {
-    "serversList" : [(5,5)],
-                    "txnlen" : [4,8,16,32,64],
-                    "threads" : [1000],
-                    "numseconds" : 60,
-                    "configs" : [
-                                  "READ_ATOMIC_LORA",
-                                  "READ_ATOMIC_LIST",
-                                ],
-                    "readprop" : [1, .75, .5, .25, 0],
-                    "iterations" : range(0,3),
-                    "numkeys" : [10, 100, 1000, 10000, 100000, 10000000],
-                    "valuesize" : [1],
-                    "keydistribution" : "zipfian",
-                    "bootstrap_time_ms" : 10000,
-                    "launch_in_bg" : False,
-                    "drop_commit_pcts" : [0],
-                    "check_commit_delays" : [-1],
-}
 
-freshness_test = {
+test_tsize = {
     "serversList" : [(5,5)],
-                    "txnlen" : [8,16,64,128],
+                    "txnlen" : [4,8,16,32,64,128],
                     "threads" : [1000],
                     "numseconds" : 60,
                     "configs" : [
-                                  "READ_ATOMIC_LORA",
-                                  "READ_ATOMIC_LIST",
                                   "READ_ATOMIC_STAMP",
-                                ],
-                    "readprop" : [0.95, .75, .5, .25],
-                    "iterations" : range(0,3),
-                    "numkeys" : [1000, 10000, 100000, 10000000],
-                    "valuesize" : [1],
-                    "keydistribution" : ["zipfian","uniform"],
-                    "bootstrap_time_ms" : 10000,
-                    "launch_in_bg" : False,
-                    "drop_commit_pcts" : [0],
-                    "check_commit_delays" : [-1],
-}
-
-lora_debug = {
-    "serversList" : [(5,5)],
-                    "txnlen" : [8],
-                    "threads" : [1000],
-                    "numseconds" : 60,
-                    "configs" : [
-                                  #"READ_ATOMIC_CONST_ORT",
-                                  #"READ_ATOMIC_LORA",
-                                  #"READ_ATOMIC_LIST",
+                                  "READ_ATOMIC_LIST",
+                                  "READ_ATOMIC_LORA",
+                                  "READ_ATOMIC_CONST_ORT",
                                   "READ_ATOMIC_NOC",
-                                  "READ_ATOMIC_STAMP",
+                                  "READ_COMMITTED"
                                 ],
                     "readprop" : [.95],
                     "iterations" : range(0,1),
-                    "numkeys" : [100000],
+                    "numkeys" : [1000000],
                     "valuesize" : [1],
                     "keydistribution" : ["zipfian"],
                     "bootstrap_time_ms" : 10000,
@@ -87,6 +48,7 @@ lora_debug = {
                     "drop_commit_pcts" : [0],
                     "check_commit_delays" : [-1],
 }
+
 
 def chg_param(d, param, value):
     d[param] = value
@@ -110,7 +72,7 @@ experiments = { "debug" :
                                       "readprop",
                                       [.95]),
                 
-                "lora" : lora_debug,
+                "tsize_test" : test_tsize,
                 
                 "threads" : chg_param(defaultsettings.copy(),
                                       "threads",
