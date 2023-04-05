@@ -2,27 +2,26 @@
 
 import subprocess
 from os import system
-from time import sleep
 
 
 
-def run_cmd(hosts, cmd, user="ubuntu", time=1000):
-    cmd = "parallel-ssh -t %d -O StrictHostKeyChecking=no -l %s -h /home/ubuntu/hosts/%s.txt \"%s\"" % (time, user, hosts, cmd)
+def run_cmd(hosts, cmd, num, user="ubuntu", time=1000):
+    cmd = "head -n %d /home/ubuntu/hosts/%s.txt > tmp.txt && parallel-ssh -t %d -O StrictHostKeyChecking=no -l %s -h tmp.txt \"%s\" && rm tmp.txt" % (num, hosts, time, user, cmd)
     if time != 1000:
         cmd = "timeout %d %s" % (time, cmd)
-    print cmd
+    print(cmd)
     system(cmd)
 
 def run_cmd_single(host, cmd, user="ubuntu", time = None):
     cmd = "ssh -o StrictHostKeyChecking=no %s@%s \"%s\"" % (user, host, cmd)
     if time:
         cmd = "timeout %d %s" % (time, cmd)
-    print cmd
+    print(cmd)
     system(cmd)
 
 def run_cmd_single_bg(host, cmd, user="ubuntu", time = None):
     cmd = "ssh -o StrictHostKeyChecking=no %s@%s \"%s\" &" % (user, host, cmd)
-    print cmd
+    print(cmd)
     system(cmd)
 
 
@@ -60,7 +59,7 @@ def get_host_ips(hosts):
         
 def sed(file, find, repl):
     iOpt = ''
-    print 'sed -i -e %s \'s/%s/%s/g\' %s' % (iOpt, escape(find), escape(repl), file)
+    print('sed -i -e %s \'s/%s/%s/g\' %s' % (iOpt, escape(find), escape(repl), file))
     system('sed -i -e %s \'s/%s/%s/g\' %s' % (iOpt, escape(find), escape(repl), file))
 
 def escape(path):

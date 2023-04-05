@@ -13,6 +13,7 @@ from threading import Thread, Lock
 from experiments import *
 import os
 import itertools
+import re
 from datetime import datetime
 from os import system 
 from time import sleep
@@ -23,67 +24,35 @@ KAIJU_HOSTS_INTERNAL=""
 KAIJU_HOSTS_EXTERNAL=""
 netCmd = "sudo sysctl net.ipv4.tcp_syncookies=1 > /dev/null; sudo sysctl net.core.netdev_max_backlog=250000 > /dev/null; sudo ifconfig ens3 txqueuelen 10000000; sudo sysctl net.core.somaxconn=100000 > /dev/null ; sudo sysctl net.core.netdev_max_backlog=10000000 > /dev/null; sudo sysctl net.ipv4.tcp_max_syn_backlog=1000000 > /dev/null; sudo sysctl -w net.ipv4.ip_local_port_range='1024 64000' > /dev/null; sudo sysctl -w net.ipv4.tcp_fin_timeout=2 > /dev/null; "
 
-n_servers = 5
-n_clients = 5
+username = "ubuntu"
+
+file_name = "/home/ubuntu/hosts/all-hosts.txt"
+
+# Read the contents of the file and store the nodes in a list
+with open(file_name, "r") as f:
+    nodes = f.readlines()
+
+# Remove newline characters from the nodes
+nodes = [node.strip() for node in nodes]
+
+n_servers = len(nodes)//2
+n_clients = len(nodes)//2
 
 #list of clients and servers IP addresses
-clients_list = [
-"10.254.3.100"
-,"10.254.1.161"
-,"10.254.3.224"
-,"10.254.0.63"
-,"10.254.0.145"
-,"10.254.3.202"
-,"10.254.3.154"
-,"10.254.0.103"
-,"10.254.1.245"
-,"10.254.0.221"
-,"10.254.1.46"
-,"10.254.2.99"
-,"10.254.3.24"
-,"10.254.2.18"
-,"10.254.2.180"
-,"10.254.1.192"
-,"10.254.1.162"
-,"10.254.3.31"
-,"10.254.1.124"
-,"10.254.2.144"
-,"10.254.1.213"
-,"10.254.3.83"
-,"10.254.0.189"
-,"10.254.3.17"
-,"10.254.0.163"
-]
+clients_list = [nodes[i] for i in range(n_servers, n_servers + n_clients)]
 
-server_list = [
-"10.254.0.150"
-,"10.254.2.184"
-,"10.254.1.57"
-,"10.254.1.236"
-,"10.254.2.119"
-,"10.254.1.164"
-,"10.254.2.220"
-,"10.254.0.177"
-,"10.254.2.87"
-,"10.254.3.239"
-,"10.254.2.107"
-,"10.254.3.108"
-,"10.254.1.223"
-,"10.254.1.226"
-,"10.254.0.60"
-,"10.254.1.145"
-,"10.254.0.183"
-,"10.254.0.128"
-,"10.254.3.99"
-,"10.254.0.117"
-,"10.254.2.171"
-,"10.254.1.59"
-,"10.254.2.154"
-,"10.254.1.99"
-,"10.254.0.236"
-]
+server_list = [nodes[i] for i in range(n_servers)]
 
-
+def get_zipf():
+    ZIPFIAN_CONSTANT = 0
+    with open('/home/ubuntu/kaiju/contrib/YCSB/core/src/main/java/com/yahoo/ycsb/generator/ZipfianGenerator.java', 'r') as file:
+        for line in file:
+            match = re.search(r'ZIPFIAN_CONSTANT\s*=\s*([\d\.]+);', line)
+            if match:
+                value = match.group(1)
+                ZIPFIAN_CONSTANT = round(float(value), 2)
+                break
+    return ZIPFIAN_CONSTANT
 
 def start_servers(**kwargs):
     HEADER = "pkill -9 java; cd /home/ubuntu/kaiju/; rm *.log;"
@@ -106,6 +75,8 @@ def start_servers(**kwargs):
      -check_commit_delay_ms %d\
      -outbound_internal_conn %d \
      -locktable_numlatches %d \
+     -opw %d \
+     -freshness_test %d \
       1>server-%d.log 2>&1 & "
     setup_hosts()
     sid = 0
@@ -131,6 +102,8 @@ def start_servers(**kwargs):
                    kwargs.get("check_commit_delay", -1),
                    kwargs.get("outbound_internal_conn", 1),
                    kwargs.get("locktable_numlatches", 1024),
+                   kwargs.get("opw", 0),
+                   kwargs.get("freshness",0),
                    s_localid))
             sid += 1
         i += 1
@@ -139,12 +112,12 @@ def start_servers(**kwargs):
 
 def setup_hosts():
     pprint("Appending authorized key...")
-    run_cmd("all-hosts", "sudo chown ubuntu /etc/security/limits.conf; sudo chmod u+w /etc/security/limits.conf; sudo echo '* soft nofile 1000000\n* hard nofile 1000000' >> /etc/security/limits.conf; sudo chown ubuntu /etc/pam.d/common-session; sudo echo 'session required pam_limits.so' >> /etc/pam.d/common-session")
+    run_cmd("all-hosts", "sudo chown ubuntu /etc/security/limits.conf; sudo chmod u+w /etc/security/limits.conf; sudo echo '* soft nofile 1000000\n* hard nofile 1000000' >> /etc/security/limits.conf; sudo chown ubuntu /etc/pam.d/common-session; sudo echo 'session required pam_limits.so' >> /etc/pam.d/common-session",n_servers+n_clients)
     #run_cmd("all-hosts", "cat /home/ubuntu/.ssh/kaiju_rsa.pub >> /home/ubuntu/.ssh/authorized_keys", user="ubuntu")
     pprint("Done")
 
-    run_cmd("all-hosts", " wget --output-document sigar.tar.gz 'http://downloads.sourceforge.net/project/sigar/sigar/1.6/hyperic-sigar-1.6.4.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fsigar%2Ffiles%2Fsigar%2F1.6%2F&ts=1375479576&use_mirror=iweb'; tar -xvf sigar*; sudo rm /usr/local/lib/libsigar*; sudo cp ./hyperic-sigar-1.6.4/sigar-bin/lib/libsigar-amd64-linux.so /usr/local/lib/; rm -rf *sigar*")
-    run_cmd("all-hosts", "sudo echo 'include /usr/local/lib' >> /etc/ld.so.conf; sudo ldconfig")
+    run_cmd("all-hosts", " wget --output-document sigar.tar.gz 'http://downloads.sourceforge.net/project/sigar/sigar/1.6/hyperic-sigar-1.6.4.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fsigar%2Ffiles%2Fsigar%2F1.6%2F&ts=1375479576&use_mirror=iweb'; tar -xvf sigar*; sudo rm /usr/local/lib/libsigar*; sudo cp ./hyperic-sigar-1.6.4/sigar-bin/lib/libsigar-amd64-linux.so /usr/local/lib/; rm -rf *sigar*",n_clients+n_servers)
+    run_cmd("all-hosts", "sudo echo 'include /usr/local/lib' >> /etc/ld.so.conf; sudo ldconfig",n_clients+n_servers)
 
 def fetch_logs(runid, clients, servers, **kwargs):
     def fetchYCSB(rundir, client):
@@ -178,6 +151,8 @@ def fetch_logs(runid, clients, servers, **kwargs):
     pprint("Fetching YCSB logs from clients.")
     
     for i,client in enumerate(clients):
+        if i == n_clients:
+            break
         if not bgfetch:
             t = Thread(target=fetchYCSB, args=(outroot, client))
             t.start()
@@ -192,6 +167,8 @@ def fetch_logs(runid, clients, servers, **kwargs):
     ths = []
     pprint("Fetching logs from servers.")
     for i,server in enumerate(servers):
+        if i == n_servers:
+            break
         if not bgfetch:
             t = Thread(target=fetchkaiju, args=(outroot, server, "S"))
             t.start()
@@ -208,7 +185,14 @@ def fetch_logs(runid, clients, servers, **kwargs):
     if bgfetch:
         sleep(30)
 def run_cmd_in_kaiju(hosts, cmd, user='ubuntu'):
-    run_cmd(hosts, "cd /home/ubuntu/kaiju/; %s" % cmd, user)
+    n = 0
+    if hosts == "all-clients":
+        n = n_clients
+    elif hosts == "all-servers":
+        n = n_servers
+    elif hosts == "all-hosts":
+        n = n_servers+n_clients
+    run_cmd(hosts, "cd /home/ubuntu/kaiju/; %s" % cmd, user, n)
 
 def pprint(str):
     global USE_COLOR
@@ -248,13 +232,17 @@ def start_ycsb_clients(**kwargs):
     sleep(10)
 
     pprint("Running YCSB on all clients.")
+    i = 0
     if kwargs.get("bgrun", False):
         for client in clients_list:
+            if i == n_clients:
+                break
+            i += 1
             start_cmd_disown(client, fmt_ycsb_string("run"))
 
         sleep(kwargs.get("time")+15)
     else:
-        run_cmd("all-clients", fmt_ycsb_string("run"), time=kwargs.get("time", 60)+30)
+        run_cmd("all-clients", fmt_ycsb_string("run"), n_clients,time=kwargs.get("time", 60)+30)
     pprint("Done")
 
 
@@ -351,11 +339,12 @@ if __name__ == "__main__":
 
         system("mkdir -p "+args.output_dir)
         system("cp experiments.py "+args.output_dir)
-
+        fresh = experiment["freshness"]
         for nc, ns in experiment["serversList"]:
+            n_clients = nc
+            n_servers = ns
             args.servers = ns
             args.clients = nc
-            n_servers = ns
             KAIJU_HOSTS_INTERNAL = None
             i = 0
             for server in server_list:
@@ -382,31 +371,40 @@ if __name__ == "__main__":
                                         for check_commit_delay in experiment["check_commit_delays"]:
                                             for config in experiment["configs"]:
                                                 for distribution in experiment["keydistribution"]:
-                                                
+                                                    if distribution == "zipfian":
+                                                        zipf = get_zipf()
+                                                    else:
+                                                        zipf = 0.0
+                                                    opw = 0
                                                     isolation_level = config
                                                     ra_algorithm = "KEY_LIST"
                                                     algo = config
                                                     if(config.find("READ_ATOMIC") != -1):
                                                         isolation_level = "READ_ATOMIC"
-                                                        if(config.find("LIST") != -1):
+                                                        if(config == "READ_ATOMIC_LIST"):
                                                             ra_algorithm = "KEY_LIST"
-                                                            if run_opw_RAMP:
-                                                                algo = "READ_ATOMIC_FASTOPW"
-                                                        elif(config.find("BLOOM") != -1):
+                                                        elif(config == "READ_ATOMIC_BLOOM"):
                                                             ra_algorithm = "BLOOM_FILTER"
-                                                        elif(config.find("LORA") != -1):
+                                                        elif(config == "READ_ATOMIC_LORA"):
                                                             ra_algorithm = "LORA"
-                                                        elif(config.find("CONST_ORT") != -1):
+                                                        elif(config == "READ_ATOMIC_CONST_ORT"):
                                                             ra_algorithm = "CONST_ORT"
-                                                        elif(config.find("NOC") != -1):
+                                                        elif(config == "READ_ATOMIC_NOC"):
                                                             ra_algorithm = "NOC"
+                                                        elif(config == "READ_ATOMIC_FASTOPW"):
+                                                            ra_algorithm = "KEY_LIST"
+                                                            opw = 1
+                                                        elif(config == "READ_ATOMIC_SMALLOPW"):
+                                                            ra_algorithm = "TIMESTAMP"
+                                                            opw = 1
                                                         else:
                                                             ra_algorithm = "TIMESTAMP"
-                                                            if run_opw_RAMP:
-                                                                algo = "READ_ATOMIC_SMALLOPW"
-                                                    
+                                                    elif(config == "EIGER"):
+                                                        algo = "EIGER"
+                                                        ra_algorithm = "EIGER"
+
                                                     firstrun = True
-                                                    run_ycsb_trial(tag, runid=("%s-%d-THREADS%d-RPROP%s-VS%d-TXN%d-NC%s-NS%s-NK%d-DCP%f-CCD%d-IT%d-KD%s" % (algo,
+                                                    run_ycsb_trial(tag, runid=("%s-%d-THREADS%d-RPROP%s-VS%d-TXN%d-NC%s-NS%s-NK%d-DCP%f-CCD%d-IT%d-KD%s-ZC%f" % (algo,
                                                                                                                                                     txnlen,
                                                                                                                                                 threads,
                                                                                                                                                 readprop,
@@ -418,7 +416,9 @@ if __name__ == "__main__":
                                                                                                                                                 drop_commit_pct,
                                                                                                                                                 check_commit_delay,
                                                                                                                                                 iteration,
-                                                                                                                                                distribution)),
+                                                                                                                                                distribution,
+                                                                                                                                                round(zipf,2)
+                                                                                                                                                )),
                                                                 bootstrap_time_ms=experiment["bootstrap_time_ms"],
                                                                 threads=threads,
                                                                 txnlen=txnlen,
@@ -435,5 +435,7 @@ if __name__ == "__main__":
                                                                 killservers=firstrun,
                                                                 drop_commit_pct=drop_commit_pct,
                                                                 check_commit_delay=check_commit_delay,
-                                                                bgrun=experiment["launch_in_bg"])
+                                                                bgrun=experiment["launch_in_bg"],
+                                                                opw = opw,
+                                                                freshness=fresh)
                                                     firstrun = False
