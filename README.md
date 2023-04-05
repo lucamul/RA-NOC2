@@ -35,7 +35,7 @@ In `experiments.py`, you will find different experiments that you can run from t
 ```
 python setup_hosts.py --color -c us-west-2 -nc NUM_CLIENTS -ns NUM_SERVERS --experiment EXP --tag example
 ```
-Where `EXP` is the name of the experiment in `experiments.py`, and `NUM_CLIENTS` and `NUM_SERVERS` are the number of physical nodes, by default write 8 and 8.
+Where `EXP` is the name of the experiment in `experiments.py`, and `NUM_CLIENTS` and `NUM_SERVERS` are the number of physical nodes, by default write 5 and 5.
 
 Alternatively, you can run one of the existing experiments by running:
 1. `bash run_default.sh`: runs a simple experiment with default parameters.
