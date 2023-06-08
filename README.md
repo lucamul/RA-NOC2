@@ -41,9 +41,9 @@ Alternatively, you can run one of the existing experiments by running:
 1. `bash run_default.sh`: runs a simple experiment with default parameters.
 2. `bash run_number_clients.sh`: runs an experiment varying the number of client threads.
 3. `bash run_number_servers.sh`: runs an experiment varying the number of servers (beware you need enough nodes for this).
-4. `bash run_zipf_const.sh`: used to run experiment with zipfian constants, but edit the zipf in the Java code first (info in the script).
+etc.
 
-and many others. You can also run all by doing `bash run_all.sh`,this will take several hours.
+and many others. You can also run all by doing `bash run_all.sh`,this will take several hours and is discourage as if the cluster has any problem in the middle of it you may get faulty results and not realise.
 
 The logs will be uploaded to the `output` folder.
 
