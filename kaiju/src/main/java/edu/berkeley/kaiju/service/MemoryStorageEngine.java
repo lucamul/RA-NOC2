@@ -90,26 +90,9 @@ public class MemoryStorageEngine {
                                                                                    });
 
 
-    /*
-     These lines take care of GC. When using OPWs it's possible that some values get collected when they should not, 
-     therefore when testing you should try to tune these parameters accordingly.
-     RAMP-F correctness with GC according to the paper relies on their GC mechanism (only collecting committed values after they are not latest)
-     Which is why I increased the GC for the prepared values at an higher number to avoid this breaking and we specifically see some anomalies with OPWs 
-     when GC is on for prepared values.
-     LORA may suffer from problems where the data is not fresh enough and thus already collected, so you may want to adjust its parameter too.
-     RAMP-S and ORA do not seem to experience any anomaly in their behaviour.
-     You can adjust the values, especially when running write heavy workloads.
-    */
-    private static final int sOPWMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.TIMESTAMP && 
-                                            Config.getConfig().opw == 1 && 
-                                                Config.getConfig().isolation_level == IsolationLevel.READ_ATOMIC) ? 1 : 1;
-    private static final int fOPWMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.KEY_LIST && 
-                                            Config.getConfig().opw == 1 && 
-                                                Config.getConfig().isolation_level == IsolationLevel.READ_ATOMIC) ? 4 : 1;
-    private static final int ORAOPWMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.CONST_ORT) ?  1 : 1;
-    private static final int LORAOPWMs = (Config.getConfig().readatomic_algorithm == ReadAtomicAlgorithm.LORA) ?  1 : 1;
-    private static final long gcTimeMs = Config.getConfig().overwrite_gc_ms*LORAOPWMs;
-    private static final long gcTimePrepMs = Config.getConfig().overwrite_gc_ms*sOPWMs*fOPWMs*ORAOPWMs;
+
+    private static final long gcTimeMs = Config.getConfig().overwrite_gc_ms;
+    private static final long gcTimePrepMs = Config.getConfig().overwrite_gc_prep_ms;
                                                                                    
 
     public static Logger logger = LoggerFactory.getLogger(MemoryStorageEngine.class);

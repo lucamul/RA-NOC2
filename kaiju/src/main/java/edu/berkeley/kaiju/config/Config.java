@@ -136,6 +136,9 @@ public class Config {
      */
     @Parameter(names = { "-overwrite_gc_ms" })
     public Integer overwrite_gc_ms = 4000;
+    
+    @Parameter(names = { "-overwrite_gc_prep_ms" })
+    public Integer overwrite_gc_prep_ms = 4000;
 
     @Parameter(names = "-bootstrap_time",
                description = "Time to wait between starting to listen for new connections and making outgoing connections (ms)")

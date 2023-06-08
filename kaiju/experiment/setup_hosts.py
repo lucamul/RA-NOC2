@@ -76,6 +76,7 @@ def start_servers(**kwargs):
      -outbound_internal_conn %d \
      -locktable_numlatches %d \
      -opw %d \
+     -overwrite_gc_prep_ms %d \
      -freshness_test %d \
       1>server-%d.log 2>&1 & "
     setup_hosts()
@@ -103,6 +104,7 @@ def start_servers(**kwargs):
                    kwargs.get("outbound_internal_conn", 1),
                    kwargs.get("locktable_numlatches", 1024),
                    kwargs.get("opw", 0),
+                   kwargs.get("overwrite_gc_prep_ms", 4000),
                    kwargs.get("freshness",0),
                    s_localid))
             sid += 1
@@ -245,6 +247,16 @@ def start_ycsb_clients(**kwargs):
         run_cmd("all-clients", fmt_ycsb_string("run"), n_clients,time=kwargs.get("time", 60)+30)
     pprint("Done")
 
+
+def get_prep_gc(algo, opw, read_prop):
+    gc_prep = 4000
+    if algo == "KEY_LIST"and opw == 1:
+        if read_prop > 0.7:
+            gc_prep*= 4
+        else:
+            #TODO: make sure this is the correct scale
+            gc_prep *= 1
+    return gc_prep
 
 def run_ycsb_trial(tag, serverArgs="", **kwargs):
     pprint("Running trial %s" % kwargs.get("runid", "no label"))
@@ -402,7 +414,7 @@ if __name__ == "__main__":
                                                     elif(config == "EIGER"):
                                                         algo = "EIGER"
                                                         ra_algorithm = "EIGER"
-
+                                                    gc_prep = get_prep_gc(ra_algorithm,opw,readprop)
                                                     firstrun = True
                                                     run_ycsb_trial(tag, runid=("%s-%d-THREADS%d-RPROP%s-VS%d-TXN%d-NC%s-NS%s-NK%d-DCP%f-CCD%d-IT%d-KD%s-ZC%f" % (algo,
                                                                                                                                                     txnlen,
@@ -437,5 +449,6 @@ if __name__ == "__main__":
                                                                 check_commit_delay=check_commit_delay,
                                                                 bgrun=experiment["launch_in_bg"],
                                                                 opw = opw,
+                                                                overwrite_gc_prep_ms = gc_prep,
                                                                 freshness=fresh)
                                                     firstrun = False
