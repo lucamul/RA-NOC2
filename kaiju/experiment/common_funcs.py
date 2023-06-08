@@ -3,7 +3,20 @@
 import subprocess
 from os import system
 
-
+def get_prep_gc(algo, opw, read_prop):
+    gc_prep = 4000
+    if algo == "KEY_LIST" and opw == 1:
+        if read_prop >= 0.7:
+            gc_prep*= 4
+        else:
+            gc_prep *= 1
+    elif algo == "TIMESTAMP" and opw == 1:
+        gc_prep *= 1
+    elif algo == "CONST_ORT":
+        gc_prep *= 1
+    elif algo == "LORA":
+        gc_prep *= 1
+    return gc_prep
 
 def run_cmd(hosts, cmd, num, user="ubuntu", time=1000):
     cmd = "head -n %d /home/ubuntu/hosts/%s.txt > tmp.txt && parallel-ssh -t %d -O StrictHostKeyChecking=no -l %s -h tmp.txt \"%s\" && rm tmp.txt" % (num, hosts, time, user, cmd)

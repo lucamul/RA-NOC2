@@ -9,6 +9,7 @@ from common_funcs import run_script
 from common_funcs import fetch_file_single
 from common_funcs import fetch_file_single_compressed
 from common_funcs import fetch_file_single_compressed_bg
+from common_funcs import get_prep_gc
 from threading import Thread, Lock
 from experiments import *
 import os
@@ -247,17 +248,6 @@ def start_ycsb_clients(**kwargs):
         run_cmd("all-clients", fmt_ycsb_string("run"), n_clients,time=kwargs.get("time", 60)+30)
     pprint("Done")
 
-
-def get_prep_gc(algo, opw, read_prop):
-    gc_prep = 4000
-    if algo == "KEY_LIST"and opw == 1:
-        if read_prop > 0.7:
-            gc_prep*= 4
-        else:
-            #TODO: make sure this is the correct scale
-            gc_prep *= 1
-    return gc_prep
-
 def run_ycsb_trial(tag, serverArgs="", **kwargs):
     pprint("Running trial %s" % kwargs.get("runid", "no label"))
     pprint("Restarting kaiju clusters %s" % tag)
@@ -414,7 +404,6 @@ if __name__ == "__main__":
                                                     elif(config == "EIGER"):
                                                         algo = "EIGER"
                                                         ra_algorithm = "EIGER"
-                                                    gc_prep = get_prep_gc(ra_algorithm,opw,readprop)
                                                     firstrun = True
                                                     run_ycsb_trial(tag, runid=("%s-%d-THREADS%d-RPROP%s-VS%d-TXN%d-NC%s-NS%s-NK%d-DCP%f-CCD%d-IT%d-KD%s-ZC%f" % (algo,
                                                                                                                                                     txnlen,
@@ -449,6 +438,6 @@ if __name__ == "__main__":
                                                                 check_commit_delay=check_commit_delay,
                                                                 bgrun=experiment["launch_in_bg"],
                                                                 opw = opw,
-                                                                overwrite_gc_prep_ms = gc_prep,
+                                                                overwrite_gc_prep_ms = get_prep_gc(ra_algorithm,opw,readprop),
                                                                 freshness=fresh)
                                                     firstrun = False
