@@ -1,6 +1,6 @@
-# ORA Prototype
+# RA-NOC2 Prototype
 
-This repository contains the prototype for the ORA project. It is based on the repository from the SIGMOD 2014 paper titled [Scalable Atomic Visibility with RAMP Transactions](http://www.bailis.org/papers/ramp-sigmod2014.pdf) and includes enhancements to run experiments on ORA, LORA and the OPW version of RAMP-F and RAMP-S.
+This repository contains the prototype for the RA-NOC2 project. It is based on the repository from the SIGMOD 2014 paper titled [Scalable Atomic Visibility with RAMP Transactions](http://www.bailis.org/papers/ramp-sigmod2014.pdf) and includes enhancements to run experiments on ORA, LORA and the OPW version of RAMP-F and RAMP-S.
 
 ## Setting up the CloudLab Cluster
 
