@@ -2,6 +2,8 @@ package edu.berkeley.kaiju.service.request;
 
 import com.google.common.collect.Maps;
 import edu.berkeley.kaiju.config.Config;
+import edu.berkeley.kaiju.data.DataItem;
+import edu.berkeley.kaiju.service.request.message.request.PreparePutAllRequest;
 import edu.berkeley.kaiju.net.callback.IMessageCallback;
 import edu.berkeley.kaiju.net.callback.MultiMessageCallback;
 import edu.berkeley.kaiju.net.callback.SingleMessageCallback;
@@ -81,8 +83,18 @@ public class RequestDispatcher {
             request.getValue().senderID = Config.getConfig().server_id;
             request.getValue().requestID = requestID;
 
-            OutboundRouter.getRouter().getChannelByResourceID(request.getKey())
+            if(request.getValue() instanceof PreparePutAllRequest){
+                if(((PreparePutAllRequest)request.getValue()).keyValuePairs.values().stream().findFirst().orElse(DataItem.getNullItem()).getCid() == "replica"){
+                    OutboundRouter.getRouter().getReplicaChannelByResourceID(request.getKey())
                           .enqueue(request.getValue());
+                }else{
+                    OutboundRouter.getRouter().getChannelByResourceID(request.getKey())
+                          .enqueue(request.getValue());
+                }
+            }else{
+                OutboundRouter.getRouter().getChannelByResourceID(request.getKey())
+                          .enqueue(request.getValue());
+            }
         }
 
         if(callback == null)

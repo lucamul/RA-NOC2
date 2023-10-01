@@ -48,7 +48,7 @@ public class KaijuServer {
         RequestDispatcher dispatcher = new RequestDispatcher(requestExecutorFactory);
         requestExecutorFactory.setEigerExecutor(new EigerExecutor(dispatcher, storage));
         new CooperativeCommitter(storage, new KaijuServiceHandler(dispatcher, storage, lockManager));
-        
+        storage.setDispatcher(dispatcher);       
         try {
             InboundMessagingService.start(dispatcher);
         } catch (IOException e) {

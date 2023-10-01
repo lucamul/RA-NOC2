@@ -18,6 +18,10 @@ import edu.berkeley.kaiju.exception.AbortedException;
 import edu.berkeley.kaiju.exception.HandlerException;
 import edu.berkeley.kaiju.exception.KaijuException;
 import edu.berkeley.kaiju.monitor.MetricsManager;
+import edu.berkeley.kaiju.net.routing.OutboundRouter;
+import edu.berkeley.kaiju.service.request.RequestDispatcher;
+import edu.berkeley.kaiju.service.request.message.KaijuMessage;
+import edu.berkeley.kaiju.service.request.message.request.PreparePutAllRequest;
 import edu.berkeley.kaiju.service.request.message.response.KaijuResponse;
 import edu.berkeley.kaiju.util.KeyCidPair;
 import edu.berkeley.kaiju.util.Timestamp;
@@ -36,6 +40,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
+import java.util.Map.Entry;
 
 /*
  Fairly simple in-memory KVS with limited support for multiversioning.
@@ -112,8 +117,11 @@ public class MemoryStorageEngine {
 
     // when we get a 'commit' message, this map tells us which [Key, Timestamp] pairs were actually committed
     private ConcurrentMap<Long, List<KeyTimestampPair>> preparedNotCommittedByStamp = Maps.newConcurrentMap();
-
-                                                                                   
+                                                                                
+    // Replication:
+    private BlockingQueue<KeyTimestampPair> toReplicate = Queues.newLinkedBlockingQueue();
+    private RequestDispatcher dispatcher;                                                                            
+    
     private boolean tests = (Config.getConfig().freshness_test == 1 || Config.getConfig().ra_tester == 1);
 
     // only used in E-PCI, which requires ordering for lookups
@@ -170,6 +178,61 @@ public class MemoryStorageEngine {
                 }
             }
         }, "Storage-GC-Thread").start();
+        new Thread(new Runnable(){
+
+            @Override
+            public void run() {
+                if(Config.getConfig().replication == 0) return;
+                while(true){
+                    try {
+                        Thread.sleep(10);
+                        int i = 0;
+                        Map<String,DataItem> itemsToReplicate = Maps.newConcurrentMap();
+
+                        while(i < Config.getConfig().batch_size_replication){
+                            if(toReplicate.isEmpty()) continue;
+                            KeyTimestampPair item = toReplicate.take();
+                            itemsToReplicate.put(item.key, getItemByVersion(item.key, item.timestamp));
+                            i++;
+                        }
+                        if(itemsToReplicate.isEmpty()) continue;
+
+                        Map<Integer, Collection<String>> keysByServerID = OutboundRouter.getRouter().groupKeysByReplicaServerID(itemsToReplicate.keySet());
+                        Map<Integer, KaijuMessage> requestsByServerID = Maps.newHashMap();
+
+                        for(int serverID : keysByServerID.keySet()) {
+                            Map<String, DataItem> keyValuePairsForServer = Maps.newHashMap();
+                            for(String key : keysByServerID.get(serverID)) {
+                                keyValuePairsForServer.put(key, itemsToReplicate.get(key));
+                                keyValuePairsForServer.get(key).setCid("replica");
+                            }
+                            requestsByServerID.put(serverID, new PreparePutAllRequest(keyValuePairsForServer));
+                        }
+
+                        Collection<KaijuResponse> responses = dispatcher.multiRequest(requestsByServerID);
+
+                        KaijuResponse.coalesceErrorsIntoException(responses);
+                        logger.warn("replicating");            
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+
+        }, "Replication-Thread").start();
+    }
+
+    public void setDispatcher(RequestDispatcher dispatcher){
+        // used to send replication messages to the replica
+        this.dispatcher = dispatcher;
+    }
+
+    public void replicaPutAll(Map<String,DataItem> items){
+        // batch replication
+        logger.warn("replicating " + Integer.toString(items.size()) + " items");
+        for( Entry<String, DataItem> item : items.entrySet() ){
+             dataItems.put(new KeyTimestampPair(item.getKey(), item.getValue().getTimestamp()), item.getValue());
+        }
     }
 
     //freshness functions:
@@ -463,6 +526,9 @@ public class MemoryStorageEngine {
                 nopWriteMeter.mark();
                 break;
             }
+        }
+        if(Config.getConfig().replication == 1){
+            this.toReplicate.add(new KeyTimestampPair(key, timestamp));
         }
     }
 

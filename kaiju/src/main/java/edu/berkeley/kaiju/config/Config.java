@@ -37,6 +37,18 @@ public class Config {
     @Parameter(names = "-opw",
         description = "enter 1 if you want RAMP to be with OPWs")
     public Integer opw = 0;
+
+    @Parameter(names = "-replication",
+    description = "enter 1 if you want to allow replication")
+    public Integer replication = 0;
+
+    /*
+    replication batch size
+    */
+    @Parameter(names = "-batch_size_replication",
+        description = "enter the size for the batches of replicas")
+    public Integer batch_size_replication = 8;
+
     /*
      Outputs a log of all the transactions executed which you can use to check if the system is behaving correctly
     */

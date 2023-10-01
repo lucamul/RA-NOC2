@@ -19,24 +19,46 @@ import java.util.Map;
  Replication is not supported.
  */
 public abstract class OutboundRouter {
-    protected static List<InternalTCPSender> senders = Lists.newArrayList();
+    public static List<InternalTCPSender> senders = Lists.newArrayList();
+    public static List<InternalTCPSender> replicaSenders = Lists.newArrayList();
 
     private static OutboundRouter router = null;
 
 
     public abstract int getServerIDByResourceID(int resourceID);
+    public abstract int getReplicaServerIDByResourceID(int resourceID);
 
     public InternalTCPSender getChannelByResourceID(int resourceID) {
         return senders.get(getServerIDByResourceID(resourceID));
     }
 
+    public InternalTCPSender getReplicaChannelByResourceID(int resourceID) {
+        return replicaSenders.get(getReplicaServerIDByResourceID(resourceID) % senders.size());
+    }
+
     public static InternalTCPSender getChannelByServerID(int serverID) {
+        if(serverID > senders.size()){
+            return replicaSenders.get(serverID % senders.size());
+        }
         return senders.get(serverID);
     }
 
     public OutboundRouter() throws IOException {
-        for(InetSocketAddress serverAddress : Config.getConfig().cluster_servers) {
+        List<InetSocketAddress> servers;
+        List<InetSocketAddress> replicas;
+        if(Config.getConfig().replication == 1){
+            int middleIndex = Config.getConfig().cluster_servers.size() / 2;
+            servers = new ArrayList<InetSocketAddress>(Config.getConfig().cluster_servers.subList(0, middleIndex));
+            replicas = new ArrayList<InetSocketAddress>(Config.getConfig().cluster_servers.subList(middleIndex, Config.getConfig().cluster_servers.size()));
+        }else{
+            servers = new ArrayList<InetSocketAddress>(Config.getConfig().cluster_servers);
+            replicas = new ArrayList<InetSocketAddress>();
+        }
+        for(InetSocketAddress serverAddress : servers) {
             senders.add(new InternalTCPSender(serverAddress));
+        }
+        for(InetSocketAddress serverAddress : replicas){
+            replicaSenders.add(new InternalTCPSender(serverAddress));
         }
     }
 
@@ -66,6 +88,18 @@ public abstract class OutboundRouter {
         Map<Integer, Collection<String>> ret = Maps.newHashMap();
         for(String key : keys) {
             int serverID = getServerIDByResourceID(key.hashCode());
+            if(!ret.containsKey(serverID))
+                ret.put(serverID,  new ArrayList<String>());
+            ret.get(serverID).add(key);
+        }
+
+        return ret;
+    }
+
+    public Map<Integer, Collection<String>> groupKeysByReplicaServerID(Collection<String> keys) {
+        Map<Integer, Collection<String>> ret = Maps.newHashMap();
+        for(String key : keys) {
+            int serverID = getReplicaServerIDByResourceID(key.hashCode());
             if(!ret.containsKey(serverID))
                 ret.put(serverID,  new ArrayList<String>());
             ret.get(serverID).add(key);
