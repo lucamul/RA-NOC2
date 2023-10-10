@@ -45,6 +45,7 @@ nodes = [node.strip() for node in nodes]
 
 n_servers = len(clients_list)
 n_clients = len(server_list)
+is_replicated = False
 
 def get_zipf():
     ZIPFIAN_CONSTANT = 0
@@ -86,8 +87,12 @@ def start_servers(**kwargs):
     setup_hosts()
     sid = 0
     i = 0
+    replication = kwargs.get("replication",0)
+    num_s = n_servers
+    if replication == 1:
+        num_s *= 2
     for server in server_list:
-        if i == n_servers:
+        if i == num_s:
             break
         servercmd = HEADER
         for s_localid in range(0, SERVERS_PER_HOST):
@@ -118,13 +123,16 @@ def start_servers(**kwargs):
         start_cmd_disown_nobg(server, servercmd)
 
 def setup_hosts():
+    num_s = n_servers
+    if is_replicated:
+        num_s *= 2
     pprint("Appending authorized key...")
-    run_cmd("all-hosts", "sudo chown ubuntu /etc/security/limits.conf; sudo chmod u+w /etc/security/limits.conf; sudo echo '* soft nofile 1000000\n* hard nofile 1000000' >> /etc/security/limits.conf; sudo chown ubuntu /etc/pam.d/common-session; sudo echo 'session required pam_limits.so' >> /etc/pam.d/common-session",n_servers+n_clients)
+    run_cmd("all-hosts", "sudo chown ubuntu /etc/security/limits.conf; sudo chmod u+w /etc/security/limits.conf; sudo echo '* soft nofile 1000000\n* hard nofile 1000000' >> /etc/security/limits.conf; sudo chown ubuntu /etc/pam.d/common-session; sudo echo 'session required pam_limits.so' >> /etc/pam.d/common-session",num_s+n_clients)
     #run_cmd("all-hosts", "cat /home/ubuntu/.ssh/kaiju_rsa.pub >> /home/ubuntu/.ssh/authorized_keys", user="ubuntu")
     pprint("Done")
 
-    run_cmd("all-hosts", " wget --output-document sigar.tar.gz 'http://downloads.sourceforge.net/project/sigar/sigar/1.6/hyperic-sigar-1.6.4.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fsigar%2Ffiles%2Fsigar%2F1.6%2F&ts=1375479576&use_mirror=iweb'; tar -xvf sigar*; sudo rm /usr/local/lib/libsigar*; sudo cp ./hyperic-sigar-1.6.4/sigar-bin/lib/libsigar-amd64-linux.so /usr/local/lib/; rm -rf *sigar*",n_clients+n_servers)
-    run_cmd("all-hosts", "sudo echo 'include /usr/local/lib' >> /etc/ld.so.conf; sudo ldconfig",n_clients+n_servers)
+    run_cmd("all-hosts", " wget --output-document sigar.tar.gz 'http://downloads.sourceforge.net/project/sigar/sigar/1.6/hyperic-sigar-1.6.4.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fsigar%2Ffiles%2Fsigar%2F1.6%2F&ts=1375479576&use_mirror=iweb'; tar -xvf sigar*; sudo rm /usr/local/lib/libsigar*; sudo cp ./hyperic-sigar-1.6.4/sigar-bin/lib/libsigar-amd64-linux.so /usr/local/lib/; rm -rf *sigar*",n_clients+num_s)
+    run_cmd("all-hosts", "sudo echo 'include /usr/local/lib' >> /etc/ld.so.conf; sudo ldconfig",n_clients+num_s)
 
 def fetch_logs(runid, clients, servers, **kwargs):
     def fetchYCSB(rundir, client):
@@ -172,9 +180,13 @@ def fetch_logs(runid, clients, servers, **kwargs):
     pprint("Done clients")
 
     ths = []
+    num_s = n_servers
+    if is_replicated:
+        num_s *= 2
+    
     pprint("Fetching logs from servers.")
     for i,server in enumerate(servers):
-        if i == n_servers:
+        if i == num_s:
             break
         if not bgfetch:
             t = Thread(target=fetchkaiju, args=(outroot, server, "S"))
@@ -193,12 +205,15 @@ def fetch_logs(runid, clients, servers, **kwargs):
         sleep(30)
 def run_cmd_in_kaiju(hosts, cmd, user='ubuntu'):
     n = 0
+    num_s = n_servers
+    if is_replicated:
+        num_s *= 2
     if hosts == "all-clients":
         n = n_clients
     elif hosts == "all-servers":
-        n = n_servers
+        n = num_s
     elif hosts == "all-hosts":
-        n = n_servers+n_clients
+        n = num_s+n_clients
     run_cmd(hosts, "cd /home/ubuntu/kaiju/; %s" % cmd, user, n)
 
 def pprint(str):
@@ -352,21 +367,26 @@ if __name__ == "__main__":
         system("cp experiments.py "+args.output_dir)
         fresh = experiment["freshness"]
         replication = experiment["replication"]
+        if replication == 1:
+            is_replicated = True
         for nc, ns in experiment["serversList"]:
             n_clients = nc
             n_servers = ns
             args.servers = ns
             args.clients = nc
+            num_s = ns
+            if replication == 1:
+                num_s *= 2
             KAIJU_HOSTS_INTERNAL = None
             i = 0
             for server in server_list:
-                if i == ns:
+                if i == num_s:
                     break
                 for loc_id in range (0,SERVERS_PER_HOST):
                     if KAIJU_HOSTS_INTERNAL:
                         KAIJU_HOSTS_INTERNAL += ","
                         KAIJU_HOSTS_EXTERNAL += ","
-                        if i < ns//2:
+                        if i < num_s//2:
                             KAIJU_HOSTS_EXTERNAL_REPLICA += ","
                     else:
                         KAIJU_HOSTS_EXTERNAL = ""
@@ -374,7 +394,7 @@ if __name__ == "__main__":
                         KAIJU_HOSTS_EXTERNAL_REPLICA = ""
                     KAIJU_HOSTS_INTERNAL += server + ":" + str(KAIJU_PORT+loc_id)
                     KAIJU_HOSTS_EXTERNAL += server + ":" + str(THRIFT_PORT+loc_id)
-                    if i < ns//2:
+                    if i < num_s//2:
                         KAIJU_HOSTS_EXTERNAL_REPLICA += server + ":" + str(THRIFT_PORT+loc_id)
                 i += 1
             for iteration in experiment["iterations"]:
