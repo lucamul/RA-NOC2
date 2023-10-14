@@ -32,17 +32,3 @@ python setup_hosts.py --color -c us-west-2 --experiment txn_len --tag $TAG
 latest_folder_name=$(ls -td /home/ubuntu/kaiju/experiment/output/*/ | head -n1)
 python3 process_results.py "$latest_folder_name" txn_len
 rm -r output/*
-
-TAG="value_size"
-python3 setup_cluster.py
-python setup_hosts.py --color -c us-west-2 --experiment value_size --tag $TAG
-latest_folder_name=$(ls -td /home/ubuntu/kaiju/experiment/output/*/ | head -n1)
-python3 process_results.py "$latest_folder_name" value_size
-rm -r output/*
-
-TAG="num_keys"
-python3 setup_cluster.py
-python setup_hosts.py --color -c us-west-2 --experiment num_keys --tag $TAG
-latest_folder_name=$(ls -td /home/ubuntu/kaiju/experiment/output/*/ | head -n1)
-python3 process_results.py "$latest_folder_name" num_keys
-rm -r output/*

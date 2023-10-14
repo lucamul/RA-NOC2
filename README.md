@@ -1,6 +1,6 @@
 # RA-NOC2 Prototype
 
-This repository contains the prototype for the RA-NOC2 project. It is based on the repository from the SIGMOD 2014 paper titled [Scalable Atomic Visibility with RAMP Transactions](http://www.bailis.org/papers/ramp-sigmod2014.pdf) and includes enhancements to run experiments on ORA, LORA and the OPW version of RAMP-F and RAMP-S.
+This repository contains the prototype for the RA-NOC2 project. It is based on the repository from the SIGMOD 2014 paper titled [Scalable Atomic Visibility with RAMP Transactions](http://www.bailis.org/papers/ramp-sigmod2014.pdf) and includes enhancements to run experiments on ORA, LORA and the OPW version of RAMP-F and RAMP-S. Most of the logic for the algorithms is located in the respective ServiceHandler files. For RA-NOC2 the logic is found in ReadAtomicOraBasedServiceHandler.java. Some more logic is found in the MemoryStorageEngine.java class which handles a lot of the server-side logic.
 
 ## Setting up the CloudLab Cluster
 
@@ -14,6 +14,8 @@ sudo apt update
 sudo apt install -y default-jdk
 sudo apt install -y pssh
 sudo apt install -y maven
+sudo apt install -y python3-pip
+pip3 install pexpect
 ```
 
 
