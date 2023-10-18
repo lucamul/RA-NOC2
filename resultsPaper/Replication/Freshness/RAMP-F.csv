@@ -1,0 +1,7 @@
+algorithm,threads,read_prop,value_size,txn_size,num_clients,num_servers,num_key,distribution,zipfian_constant,num_seconds,staleness
+RAMP-F,1000,0.95,1,16,5,5,1000000,zipfian,0.99,10,97.43
+RAMP-F,1000,0.95,1,16,5,5,1000000,zipfian,0.99,30,98.22
+RAMP-F,1000,0.95,1,16,5,5,1000000,zipfian,0.99,50,98.57
+RAMP-F,1000,0.95,1,16,5,5,1000000,zipfian,0.99,100,98.96
+RAMP-F,1000,0.95,1,16,5,5,1000000,zipfian,0.99,500,99.55
+RAMP-F,1000,0.95,1,16,5,5,1000000,zipfian,0.99,3000,99.99

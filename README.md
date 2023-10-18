@@ -32,6 +32,7 @@ pip3 install pexpect
 
 7. Now, change to the `/home/ubuntu/kaiju/experiment` folder and run `bash setup_cluster.sh`. (It will ask for a password to setup passwordless ssh among all the nodes, it's the same password that is used for the Openstack dahsboard)
 
+Remark: for replication experiments use double the number of server machines.
 ## Running an Experiment
 
 In `experiments.py`, you will find different experiments that you can run from the RAMP paper. You can expand and modify these experiments by altering the lists of parameters in the dictionary. For example, `default` is a test with default parameters. To run any experiment, change to the `/home/ubuntu/kaiju/experiment` folder and run:
