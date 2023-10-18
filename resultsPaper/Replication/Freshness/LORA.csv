@@ -1,7 +1,1 @@
 algorithm,threads,read_prop,value_size,txn_size,num_clients,num_servers,num_key,distribution,zipfian_constant,num_seconds,staleness
-LORA,1000,0.95,1,16,5,5,1000000,zipfian,0.99,10,35.72
-LORA,1000,0.95,1,16,5,5,1000000,zipfian,0.99,30,40.27
-LORA,1000,0.95,1,16,5,5,1000000,zipfian,0.99,50,43.41
-LORA,1000,0.95,1,16,5,5,1000000,zipfian,0.99,100,48.51
-LORA,1000,0.95,1,16,5,5,1000000,zipfian,0.99,500,62.60
-LORA,1000,0.95,1,16,5,5,1000000,zipfian,0.99,3000,82.44

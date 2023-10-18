@@ -3,7 +3,7 @@
 import subprocess
 from os import system
 
-def get_prep_gc(algo, opw, read_prop):
+def get_prep_gc(algo, opw, read_prop, num_s = 5):
     gc_prep = 4000
     if algo == "KEY_LIST" and opw == 1:
         if read_prop >= 0.7:
@@ -15,7 +15,7 @@ def get_prep_gc(algo, opw, read_prop):
     elif algo == "CONST_ORT":
         gc_prep *= 1
     elif algo == "LORA":
-        gc_prep *= 1
+        gc_prep *= (2*num_s)//5
     return gc_prep
 
 def run_cmd(hosts, cmd, num, user="ubuntu", time=1000):
@@ -52,7 +52,7 @@ def run_process_single(host, cmd, user="ubuntu", stdout=None, stderr=None):
 def upload_file(hosts, local_path, remote_path, user="ubuntu"):
     system("cp %s /tmp" % (local_path))
     script = local_path.split("/")[-1]
-    system("parallel-scp -O StrictHostKeyChecking=no -l %s -h /home/ubuntu/hosts/%s.txt /tmp/%s %s" % (ser, hosts, script, remote_path))
+    system("parallel-scp -O StrictHostKeyChecking=no -l %s -h /home/ubuntu/hosts/%s.txt /tmp/%s %s" % (user, hosts, script, remote_path))
 
 def run_script(hosts, script, user="ubuntu"):
     upload_file(hosts, script.split(" ")[0], "/tmp", user)

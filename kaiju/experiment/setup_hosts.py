@@ -474,6 +474,6 @@ if __name__ == "__main__":
                                                                 bgrun=experiment["launch_in_bg"],
                                                                 opw = opw,
                                                                 replication=replication,
-                                                                overwrite_gc_prep_ms = get_prep_gc(ra_algorithm,opw,readprop),
+                                                                overwrite_gc_prep_ms = get_prep_gc(ra_algorithm,opw,readprop, ns),
                                                                 freshness=fresh)
                                                     firstrun = False
