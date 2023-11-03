@@ -87,7 +87,7 @@ public class FrontendServer {
         @Override
         public void run() {
             try {
-                long tid = 0;
+                long tid = Timestamp.assignNewTimestamp();
                 long cid_tmp = Config.getConfig().server_id*10000 + Thread.currentThread().getId();
                 String cid = Long.toString(cid_tmp);
                 while(true) {
@@ -108,7 +108,7 @@ public class FrontendServer {
                     }
 
                     ClientResponse response = handler.processRequest((ClientRequest) request);
-                    if(Config.getConfig().ra_tester == 1) tid++;
+                    if(Config.getConfig().ra_tester == 1) tid=Timestamp.assignNewTimestamp(cid_tmp);
                     serializer.serialize(response);
                 }
             } catch (KryoException e) {

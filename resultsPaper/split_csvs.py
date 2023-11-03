@@ -148,7 +148,7 @@ def split_all():
                   ]
     for name, path in paths.items():
         print(name)
-        #create_algorithm_csv_files(path, f'/home/luca/ETH/Project/PORA/resultsPaper/Replication/{name}')
+        create_algorithm_csv_files(path, f'/home/luca/ETH/Project/PORA/resultsPaper/Replication/{name}')
         for algo in [ "READ_ATOMIC_STAMP", "READ_ATOMIC_LORA","READ_ATOMIC_LIST", "READ_ATOMIC_FASTOPW"]:
             create_normalized_csv_files(path, f'/home/luca/ETH/Project/PORA/resultsPaper/Replication/Normalized/Normalized{name}By{algo}', algo)
     for path in freshPaths:

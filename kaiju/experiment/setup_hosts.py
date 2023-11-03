@@ -82,6 +82,7 @@ def start_servers(**kwargs):
      -opw %d \
      -replication %d \
      -overwrite_gc_prep_ms %d \
+     -tester %d \
      -freshness_test %d \
       1>server-%d.log 2>&1 & "
     setup_hosts()
@@ -115,6 +116,7 @@ def start_servers(**kwargs):
                    kwargs.get("opw", 0),
                    kwargs.get("replication",0),
                    kwargs.get("overwrite_gc_prep_ms", 4000),
+                   kwargs.get("tester",0),
                    kwargs.get("freshness",0),
                    s_localid))
             sid += 1
@@ -367,6 +369,8 @@ if __name__ == "__main__":
         system("cp experiments.py "+args.output_dir)
         fresh = experiment["freshness"]
         replication = experiment["replication"]
+        tester = experiment["ra_tester"]
+
         if replication == 1:
             is_replicated = True
         for nc, ns in experiment["serversList"]:
@@ -473,6 +477,7 @@ if __name__ == "__main__":
                                                                 check_commit_delay=check_commit_delay,
                                                                 bgrun=experiment["launch_in_bg"],
                                                                 opw = opw,
+                                                                tester=tester,
                                                                 replication=replication,
                                                                 overwrite_gc_prep_ms = get_prep_gc(ra_algorithm,opw,readprop, ns),
                                                                 freshness=fresh)

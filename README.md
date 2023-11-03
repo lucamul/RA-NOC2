@@ -54,6 +54,13 @@ The logs will be uploaded to the `output` folder.
 
 You can process the latest results by calling `bash process_latest_results.sh` or process a specific result by calling `python3 process_results.py "folder_name" "experiment_name"` and adding `--freshness` if you want to process data freshness and not latency/throughput.
 
+
+## Generate Histories
+Running `bash run_default.sh` will generate two histories, one for RAMP-F and one for RAMP-S. (Support of histories for the other algorithms is there but untested, please check if it works before running experiments for them). Run `python3 analyze_server_logs.py <experiment-folder-name> <output-file>` to generate history. Note that experiment folder name is the folder where inside you can find all the folders `C<ip-address>` and `S<ip-address>.`
+
+## Running custom experiments
+Modify `experiments.py` and run `python3 process_results.py "folder_name" "experiment_name"` with your new experiment.
+
 ## Further Questions
 
 For further information on the codebase, please refer to the [RAMP GitHub repository](https://github.com/pbailis/ramp-sigmod2014-code).
